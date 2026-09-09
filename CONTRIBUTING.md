@@ -186,9 +186,15 @@ gh-pr-pro/
 ├── .githooks/
 │   └── pre-commit                 # Zero-dependency pre-commit verification hook
 ├── .github/
+│   ├── ISSUE_TEMPLATE/
+│   │   ├── bug_report.md          # Bug report issue template
+│   │   └── feature_request.md     # Feature request issue template
+│   ├── pull_request_template.md   # PR verification checklist template
 │   └── workflows/
 │       ├── ci.yml                 # Continuous integration (lint, test matrix, build verification)
 │       └── release.yml            # Automated release packaging via cli/gh-extension-precompile
+├── CODE_OF_CONDUCT.md             # Contributor Covenant Code of Conduct
+├── SECURITY.md                    # Security vulnerability disclosure policy
 ├── main.go                       # Application entry point
 ├── pkg/
 │   ├── api/                      # GitHub GraphQL client & pagination
@@ -266,9 +272,16 @@ Follow the [`add-metric`](file:///Users/brad/Projects/gh-pr-pro/.agents/skills/a
 
 ---
 
+## Code of Conduct & Security Policy
+
+- **Code of Conduct**: We are committed to providing a welcoming, inclusive, and harassment-free environment. All contributors and participants are expected to uphold our [Code of Conduct](CODE_OF_CONDUCT.md) (adapted from Contributor Covenant v2.1).
+- **Reporting Vulnerabilities**: Please do not report security issues via public GitHub issues. Follow the vulnerability disclosure instructions in [SECURITY.md](SECURITY.md).
+
+---
+
 ## Submitting Pull Requests
 
 1. Initialize git pre-commit hooks (if not done yet): `make init-hooks`.
 2. Create a feature branch: `git checkout -b feat/my-new-metric`.
 3. Ensure pre-commit checks pass: `make check`.
-4. Push to your fork and submit a Pull Request against `main`.
+4. Push to your fork and submit a Pull Request against `main` using the provided [pull request template](.github/pull_request_template.md).
