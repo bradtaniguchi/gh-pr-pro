@@ -30,25 +30,19 @@ jobs:
           cache: true
 
       - name: Verify Go code formatting (gofmt)
-        run: |
-          UNFORMATTED=$(gofmt -s -l .)
-          if [ -n "$UNFORMATTED" ]; then
-            echo "The following files require formatting:"
-            echo "$UNFORMATTED"
-            echo "Please run 'gofmt -s -w .' locally to format them."
-            exit 1
-          fi
+        run: make fmt-check
 
-      - name: Run go vet
-        run: go vet ./...
+      - name: Run static analysis (go vet)
+        run: make vet
 
       - name: Verify module dependencies (go mod tidy)
-        run: |
-          go mod tidy
-          if ! git diff --exit-code go.mod go.sum; then
-            echo "go.mod or go.sum is out of sync. Please run 'go mod tidy' locally."
-            exit 1
-          fi
+        run: make tidy-check
+
+      - name: Verify README CLI documentation sync
+        run: make audit-readme
+
+      - name: Audit output schema contracts
+        run: make audit-schema
 
   test:
     name: Test (${{ matrix.os }})

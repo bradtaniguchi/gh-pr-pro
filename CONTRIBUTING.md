@@ -2,6 +2,8 @@
 
 Thank you for your interest in contributing to `gh-pr-pro`! This document covers setup, development workflows, testing strategies, project architecture, and instructions for adding new metric domains.
 
+This document largely assumes you are leveraging AI coding tools to help contribute, for which this repository is designed to support to the best of its ability. That said, this document targets both human and AI powered development.
+
 ---
 
 ## Prerequisites & Tooling
@@ -61,7 +63,7 @@ A `Makefile` is included to streamline common build, test, and formatting tasks:
 # Display all available Make targets
 make help
 
-# Format, vet, test, audit README, and build the binary
+# Format, vet, test, audit README & schemas, and build the binary
 make all
 
 # Fast build of the extension binary
@@ -70,11 +72,17 @@ make build
 # Install binary to $GOPATH/bin
 make install
 
-# Pre-commit verification (fmt + vet + test + audit-readme)
+# Pre-commit verification (fmt + vet + test + audit-readme + audit-schema)
 make check
 
 # Audit README synchronization against CLI API surface
 make audit-readme
+
+# Audit output serialization format schemas
+make audit-schema
+
+# Verify cross-compilation across all 5 target platforms (Linux, macOS, Windows)
+make check-cross-compile
 ```
 
 You can test commands locally against any public repository without changing directory:
@@ -162,60 +170,72 @@ gh pr-pro overview --past 30d --json -R cli/cli
 gh-pr-pro/
 ├── .agents/
 │   └── skills/
-│       └── readme-api-sync/      # AI skill to review & sync README on API surface changes
+│       ├── readme-api-sync/        # AI skill to review & sync README on API surface changes
+│       ├── add-metric/             # AI skill to scaffold & integrate new metric subcommands
+│       ├── schema-regression-test/ # AI skill to audit & verify output schemas (JSON/CSV/TSV/MD)
+│       └── release-prep/           # AI skill for cross-compile verification, notes & tagging
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml               # Continuous integration (lint, test matrix, build verification)
-│       └── release.yml          # Automated release packaging via cli/gh-extension-precompile
-├── main.go                     # Application entry point
+│       ├── ci.yml                 # Continuous integration (lint, test matrix, build verification)
+│       └── release.yml            # Automated release packaging via cli/gh-extension-precompile
+├── main.go                       # Application entry point
 ├── pkg/
-│   ├── api/                    # GitHub GraphQL client & pagination
-│   │   ├── client.go           # GraphQL client using go-gh API
-│   │   └── models.go           # Raw GraphQL schema structs & queries
-│   ├── cache/                  # Local persistent cache manager
-│   │   └── cache.go            # File-based JSON caching (~/.cache/gh-pr-pro/)
-│   ├── cmd/                    # Cobra CLI command definitions
-│   │   ├── root.go             # Global flags & repository resolution
-│   │   ├── time.go             # time domain (merge, review, draft, pickup, idle)
-│   │   ├── quality.go          # quality domain (ci, rework, conflicts, reverts)
-│   │   ├── code.go             # code domain (size, commits)
-│   │   ├── team.go             # team domain (throughput, reviews, unreviewed)
-│   │   ├── overview.go         # overview composite scorecard
-│   │   └── export.go           # export raw dataset streamer
-│   ├── metrics/                # Metric processing & math engine
-│   │   ├── types.go            # ProcessedPR and metric schemas
-│   │   ├── calculator.go       # Raw GraphQL node -> ProcessedPR transformer
-│   │   ├── aggregation.go      # Grouping & dimension bucketing
-│   │   └── stats.go            # Percentiles (p50..p99), means, and formatting
-│   └── output/                 # Multi-format rendering engine
-│       └── formatter.go        # Text tables, JSON, CSV, TSV, and Markdown
-├── PRD.md                      # Product Requirements Document
-├── README.md                   # User documentation & CLI reference
-└── CONTRIBUTING.md             # Development & testing guide
+│   ├── api/                      # GitHub GraphQL client & pagination
+│   │   ├── client.go             # GraphQL client using go-gh API
+│   │   └── models.go             # Raw GraphQL schema structs & queries
+│   ├── cache/                    # Local persistent cache manager
+│   │   └── cache.go              # File-based JSON caching (~/.cache/gh-pr-pro/)
+│   ├── cmd/                      # Cobra CLI command definitions
+│   │   ├── root.go               # Global flags & repository resolution
+│   │   ├── time.go               # time domain (merge, review, draft, pickup, idle)
+│   │   ├── quality.go            # quality domain (ci, rework, conflicts, reverts)
+│   │   ├── code.go               # code domain (size, commits)
+│   │   ├── team.go               # team domain (throughput, reviews, unreviewed)
+│   │   ├── overview.go           # overview composite scorecard
+│   │   ├── export.go             # export raw dataset streamer
+│   │   └── cache.go              # cache management commands
+│   ├── metrics/                  # Metric processing & math engine
+│   │   ├── types.go              # ProcessedPR and metric schemas
+│   │   ├── calculator.go         # Raw GraphQL node -> ProcessedPR transformer
+│   │   ├── aggregation.go        # Grouping & dimension bucketing
+│   │   └── stats.go              # Percentiles (p50..p99), means, and formatting
+│   └── output/                   # Multi-format rendering engine
+│       └── formatter.go          # Text tables, JSON, CSV, TSV, and Markdown
+├── README.md                     # User documentation & CLI reference
+├── CONTRIBUTING.md               # Development & testing guide
+└── AGENTS.md                     # AI agent architecture and workflow instructions
 ```
 
 ---
 
-## Adding a New Metric Domain or Subcommand
+Follow the [`add-metric`](file:///Users/brad/Projects/gh-pr-pro/.agents/skills/add-metric/SKILL.md) skill workflow when contributing a new metric:
 
-Follow these steps when contributing a new metric:
+1. **Scaffold Boilerplate**:
+   ```bash
+   go run .agents/skills/add-metric/scripts/scaffold_metric.go --domain <domain> --metric <subcommand>
+   ```
 
-1. **Update Domain Structs (`pkg/metrics/types.go`)**:
+2. **Update Domain Structs (`pkg/metrics/types.go`)**:
    Add any new calculated fields to `ProcessedPR`.
 
-2. **Add Calculation Logic (`pkg/metrics/calculator.go`)**:
+3. **Add Calculation Logic (`pkg/metrics/calculator.go`)**:
    Extract and compute the new metric from raw GraphQL timeline items, reviews, or commits.
 
-3. **Update Aggregator (`pkg/metrics/aggregation.go`)**:
+4. **Update Aggregator (`pkg/metrics/aggregation.go`)**:
    Add the metric to `computeMetricStats(...)` so grouping and percentiles are automatically generated.
 
-4. **Register Cobra Command (`pkg/cmd/<domain>.go`)**:
+5. **Register Cobra Command (`pkg/cmd/<domain>.go`)**:
    Add the subcommand using `RunMetricCommand("<domain>", "<subcommand>")`.
 
-5. **Write Unit Tests (`pkg/metrics/*_test.go`)**:
+6. **Verify Wiring**:
+   ```bash
+   go run .agents/skills/add-metric/scripts/scaffold_metric.go --check <subcommand>
+   ```
+
+7. **Write Unit Tests (`pkg/metrics/*_test.go`)**:
    Add test coverage for calculation and grouping.
 
-6. **Update Documentation & Verify with `readme-api-sync` Skill**:
+8. **Update Documentation & Verify with `readme-api-sync` Skill**:
    Run the `readme-api-sync` skill (`.agents/skills/readme-api-sync/SKILL.md`) or `make audit-readme` to ensure `README.md` command trees and flag tables are updated.
 
 ---
@@ -238,52 +258,5 @@ Follow these steps when contributing a new metric:
 ## Submitting Pull Requests
 
 1. Create a feature branch: `git checkout -b feat/my-new-metric`.
-2. Run pre-commit checks: `make check` (formats code, runs `go vet`, executes tests with `-race`, and audits README sync).
-3. Ensure documentation (`README.md`) is in sync if you modified or added command flags (verified automatically by `make audit-readme`).
-4. Submit your pull request on GitHub! CI will run formatting checks, `go vet`, multi-OS unit tests (`ubuntu`, `macos`, `windows`), and cross-platform compilation.
-
----
-
-## Release Process
-
-Releases are fully automated via GitHub Actions using the official [`cli/gh-extension-precompile`](https://github.com/cli/gh-extension-precompile) action defined in [`.github/workflows/release.yml`](file:///Users/brad/Projects/gh-pr-pro/.github/workflows/release.yml).
-
-### How Precompiled Extensions Work
-
-When users install a GitHub CLI extension using:
-```bash
-gh extension install <owner>/gh-pr-pro
-```
-GitHub CLI first queries the repository's GitHub Releases. If precompiled assets matching the user's operating system and architecture exist, `gh` downloads and installs the binary directly, eliminating the need for users to have Go or compiler toolchains installed locally.
-
-### Publishing a New Release
-
-Maintainers can trigger a new release by creating and pushing a SemVer tag prefixed with `v`:
-
-```bash
-# 1. Ensure working tree is clean and all checks pass
-make check
-
-# 2. Create a tagged release commit
-git tag -a v0.1.0 -m "Release v0.1.0"
-git push origin v0.1.0
-```
-
-Alternatively, you can publish a release directly using GitHub CLI:
-
-```bash
-gh release create v0.1.0 --generate-notes
-```
-
-### Automated Release Pipeline Behavior
-
-When a `v*` tag is pushed, the [`.github/workflows/release.yml`](file:///Users/brad/Projects/gh-pr-pro/.github/workflows/release.yml) workflow:
-
-1. Resolves the required Go version from [`go.mod`](file:///Users/brad/Projects/gh-pr-pro/go.mod).
-2. Cross-compiles `gh-pr-pro` for all standard GitHub CLI target platforms:
-   - **macOS** (`darwin/amd64`, `darwin/arm64`)
-   - **Linux** (`linux/amd64`, `linux/arm64`, `linux/386`)
-   - **Windows** (`windows/amd64`, `windows/arm64`, `windows/386`)
-3. Packages the binaries into archives formatted with the exact naming conventions expected by `gh extension install`.
-4. Computes SHA-256 checksums (`checksums.txt`) and attaches signed build provenance attestations.
-5. Publishes or updates the corresponding GitHub Release with all precompiled assets.
+2. Ensure pre-commit checks pass: `make check`.
+3. Push to your fork and submit a Pull Request against `main`.

@@ -1,6 +1,6 @@
 # AGENTS.md — Agent & Contributor Guidance for `gh-pr-pro`
 
-This document provides architectural context, commands, coding standards, and invariant rules for AI agents and automated tools contributing to the `gh-pr-pro` codebase.
+This document provides architectural context, commands, and invariant rules for AI agents and automated tools contributing to the `gh-pr-pro` codebase.
 
 ---
 
@@ -21,24 +21,16 @@ This document provides architectural context, commands, coding standards, and in
 
 ---
 
-## 2. Common Developer & Agent Commands
+## 2. Common Commands
 
-Agents should execute standard `make` targets or native `go` commands:
+Run standard `make` targets or native `go` commands:
 
 ```bash
-# Pre-commit check: formats code, runs static analysis, audits README sync, and runs tests
+# Pre-commit verification: format check, vet, tests, and audits
 make check
 
-# Audit README synchronization against CLI API surface
-make audit-readme
-# or directly:
-./.agents/skills/readme-api-sync/scripts/audit_readme.sh
-
-# Run all unit tests with race detection (standard test invocation)
+# Run all unit tests with race detection
 go test -race -count=1 ./...
-
-# Run unit tests with verbose subtest output
-go test -v -race -count=1 ./...
 
 # Run specific package tests
 go test -v -race ./pkg/metrics/...
@@ -52,7 +44,7 @@ gofmt -s -w .
 # Run static analysis
 go vet ./...
 
-# Build the local binary
+# Build local binary
 make build
 ```
 
@@ -78,31 +70,6 @@ make build
 ### 4. Grouping & Dimensions
 Supported `--group-by` dimensions are: `none`, `day`, `week`, `month`, `quarter`, `year`, `author`, `reviewer`, `label`, `base`, `size`. When adding new metrics, ensure [`pkg/metrics/aggregation.go`](file:///Users/brad/Projects/gh-pr-pro/pkg/metrics/aggregation.go) correctly formats summary and group records.
 
-### 5. Mandatory README Synchronization on API Surface Changes
-Whenever any change is made to the CLI API surface area (commands, subcommands, flags, shorthands, default values, filter parameters, or output schemas):
-- The agent **MUST** invoke and run the [`readme-api-sync`](file:///Users/brad/Projects/gh-pr-pro/.agents/skills/readme-api-sync/SKILL.md) skill.
-- Review and update [`README.md`](file:///Users/brad/Projects/gh-pr-pro/README.md) to keep flag scoping tables, command hierarchy trees, and subcommand references 100% in line with the code.
-- Verify synchronization by running `make audit-readme` (or `./.agents/skills/readme-api-sync/scripts/audit_readme.sh`).
-- Never conclude a change with un-synchronized CLI docs.
-
----
-
-## 4. How to Add a New Metric Subcommand
-
-When adding a metric subcommand (e.g., `gh pr-pro quality security`):
-
-1. **Schema**: Add any required calculated fields to `ProcessedPR` in [`pkg/metrics/types.go`](file:///Users/brad/Projects/gh-pr-pro/pkg/metrics/types.go).
-2. **GraphQL Query & Model**: If new GraphQL fields are required, update query constants and struct tags in [`pkg/api/models.go`](file:///Users/brad/Projects/gh-pr-pro/pkg/api/models.go).
-3. **Calculation**: Update [`ProcessPRNode`](file:///Users/brad/Projects/gh-pr-pro/pkg/metrics/calculator.go) to compute and populate the metric.
-4. **Aggregation**: Update [`computeMetricStats`](file:///Users/brad/Projects/gh-pr-pro/pkg/metrics/aggregation.go) to extract metric values and attach percentiles.
-5. **CLI Registration**: In `pkg/cmd/<domain>.go`, declare the subcommand calling `RunMetricCommand(cmd, "<domain>", "<metric>")` and register it in `init()`.
-6. **Tests**: Add table-driven unit tests in `pkg/metrics/*_test.go` and command flag tests in `pkg/cmd/root_test.go`.
-7. **Documentation**: Invoke the [`readme-api-sync`](file:///Users/brad/Projects/gh-pr-pro/.agents/skills/readme-api-sync/SKILL.md) skill to review and update [`README.md`](file:///Users/brad/Projects/gh-pr-pro/README.md) and [`CONTRIBUTING.md`](file:///Users/brad/Projects/gh-pr-pro/CONTRIBUTING.md) command reference tables, and verify with `make audit-readme`.
-
----
-
-## 5. Testing & Code Quality Expectations
-
-- **Table-Driven Tests**: Write tests using `[]struct{ name string; ... }` with `t.Run(tt.name, func(t *testing.T) { ... })`.
-- **Race Detector**: All tests must pass with `go test -race ./...`.
-- **Formatting**: Always execute `gofmt -s -w .` before concluding any edit.
+### 5. Table-Driven Tests
+- Use Go's standard table-driven testing pattern (`[]struct{ name string; ... }` with `t.Run(...)`) across all packages.
+- Ensure all tests pass with the race detector enabled (`go test -race ./...`).
