@@ -69,7 +69,7 @@ jobs:
           cache: true
 
       - name: Run unit tests with race detection
-        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+        run: go test -v -race "-coverprofile=coverage.out" -covermode=atomic ./...
 
       - name: Upload coverage artifact
         if: matrix.os == 'ubuntu-latest'
