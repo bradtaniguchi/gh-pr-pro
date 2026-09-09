@@ -1,0 +1,15 @@
+# Binaries
+gh-pr-pro
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# OS files
+.DS_Store
