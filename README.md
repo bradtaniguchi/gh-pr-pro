@@ -7,6 +7,9 @@
 
 `gh-pr-pro` organizes pull request analytics into structured top-level domains (`time`, `quality`, `code`, `team`) with dedicated metric subcommands. It delivers statistical percentiles (p50, p75, p90, p99), historical trends, and uniform multi-format exports (`text`, `json`, `csv`, `tsv`, `markdown`).
 
+> [!WARNING]
+> **GitHub API Rate Limits**: Analyzing large repositories or expansive historical time ranges queries GitHub's GraphQL API extensively. While `gh-pr-pro` incorporates automatic backoff and persistent local disk caching to minimize requests, queries are subject to GitHub's primary point quotas and secondary computation limits. See [Rate Limits & GraphQL Query Economics](#rate-limits--graphql-query-economics) for quota economics and mitigation details.
+
 ---
 
 ## Installation
