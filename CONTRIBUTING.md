@@ -1,4 +1,4 @@
-# Contributing to `gh-pr-pro` 🛠️
+# Contributing to `gh-pr-pro`
 
 Thank you for your interest in contributing to `gh-pr-pro`! This document covers setup, development workflows, testing strategies, project architecture, and instructions for adding new metric domains.
 
@@ -157,6 +157,10 @@ gh pr-pro overview --past 30d --json -R cli/cli
 
 ```text
 gh-pr-pro/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml               # Continuous integration (lint, test matrix, build verification)
+│       └── release.yml          # Automated release packaging via cli/gh-extension-precompile
 ├── main.go                     # Application entry point
 ├── pkg/
 │   ├── api/                    # GitHub GraphQL client & pagination
@@ -225,6 +229,52 @@ Follow these steps when contributing a new metric:
 ## Submitting Pull Requests
 
 1. Create a feature branch: `git checkout -b feat/my-new-metric`.
-2. Ensure all tests pass: `go test -v ./...`.
+2. Run pre-commit checks: `make check`.
 3. Ensure documentation (`README.md` and `PRD.md`) is updated if you modified or added command flags.
-4. Submit your pull request on GitHub!
+4. Submit your pull request on GitHub! CI will run formatting checks, `go vet`, multi-OS unit tests (`ubuntu`, `macos`, `windows`), and cross-platform compilation.
+
+---
+
+## Release Process
+
+Releases are fully automated via GitHub Actions using the official [`cli/gh-extension-precompile`](https://github.com/cli/gh-extension-precompile) action defined in [`.github/workflows/release.yml`](file:///Users/brad/Projects/gh-pr-pro/.github/workflows/release.yml).
+
+### How Precompiled Extensions Work
+
+When users install a GitHub CLI extension using:
+```bash
+gh extension install <owner>/gh-pr-pro
+```
+GitHub CLI first queries the repository's GitHub Releases. If precompiled assets matching the user's operating system and architecture exist, `gh` downloads and installs the binary directly, eliminating the need for users to have Go or compiler toolchains installed locally.
+
+### Publishing a New Release
+
+Maintainers can trigger a new release by creating and pushing a SemVer tag prefixed with `v`:
+
+```bash
+# 1. Ensure working tree is clean and all checks pass
+make check
+
+# 2. Create a tagged release commit
+git tag -a v0.1.0 -m "Release v0.1.0"
+git push origin v0.1.0
+```
+
+Alternatively, you can publish a release directly using GitHub CLI:
+
+```bash
+gh release create v0.1.0 --generate-notes
+```
+
+### Automated Release Pipeline Behavior
+
+When a `v*` tag is pushed, the [`.github/workflows/release.yml`](file:///Users/brad/Projects/gh-pr-pro/.github/workflows/release.yml) workflow:
+
+1. Resolves the required Go version from [`go.mod`](file:///Users/brad/Projects/gh-pr-pro/go.mod).
+2. Cross-compiles `gh-pr-pro` for all standard GitHub CLI target platforms:
+   - **macOS** (`darwin/amd64`, `darwin/arm64`)
+   - **Linux** (`linux/amd64`, `linux/arm64`, `linux/386`)
+   - **Windows** (`windows/amd64`, `windows/arm64`, `windows/386`)
+3. Packages the binaries into archives formatted with the exact naming conventions expected by `gh extension install`.
+4. Computes SHA-256 checksums (`checksums.txt`) and attaches signed build provenance attestations.
+5. Publishes or updates the corresponding GitHub Release with all precompiled assets.

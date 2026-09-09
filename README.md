@@ -1,4 +1,4 @@
-# `gh-pr-pro` 🚀
+# `gh-pr-pro`
 
 > Advanced Pull Request Analytics & Engineering Intelligence extension for the GitHub CLI (`gh`).
 
