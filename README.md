@@ -445,4 +445,6 @@ GitHub's GraphQL API uses a **point-based rate limit system** rather than simple
 ## Contributing & License
 
 - To contribute to `gh-pr-pro`, see the [Contributing Guide](CONTRIBUTING.md).
+- Please review our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
+- For security vulnerability disclosures, refer to our [Security Policy](SECURITY.md).
 - Distributed under the [MIT License](LICENSE).
