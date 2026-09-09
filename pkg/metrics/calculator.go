@@ -18,7 +18,6 @@ import (
 //   - Pickup queue latency and total Time to Merge (Cycle Time)
 //   - CI status check rollup analysis to identify failed check runs and failing suite names
 func ProcessPRNode(node api.GraphQLPRNode) ProcessedPR {
-
 	pr := ProcessedPR{
 		Number:            node.Number,
 		Title:             node.Title,
@@ -195,11 +194,12 @@ func ProcessPRNode(node api.GraphQLPRNode) ProcessedPR {
 					name = ctx.Context
 				}
 
-				if ctx.Typename == "CheckRun" {
+				switch ctx.Typename {
+				case "CheckRun":
 					if ctx.Conclusion == "FAILURE" || ctx.Conclusion == "TIMED_OUT" || ctx.Conclusion == "STARTUP_FAILURE" {
 						isFailed = true
 					}
-				} else if ctx.Typename == "StatusContext" {
+				case "StatusContext":
 					if ctx.State == "FAILURE" || ctx.State == "ERROR" {
 						isFailed = true
 					}

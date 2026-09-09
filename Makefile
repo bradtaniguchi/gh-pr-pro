@@ -1,10 +1,10 @@
 BINARY_NAME ?= gh-pr-pro
 
-.PHONY: all help build install test test-v cover cover-text vet fmt fmt-check tidy-check clean check doc audit-readme audit-schema check-cross-compile init-hooks
+.PHONY: all help build install test test-v cover cover-text vet fmt fmt-check lint tidy-check clean check doc audit-readme audit-schema check-cross-compile init-hooks
 
 ##@ Build & Execution
 
-all: fmt-check vet test audit-readme audit-schema build ## Format, vet, test, audit, and build binary
+all: tidy-check lint test audit-readme audit-schema build ## Tidy, lint, test, audit, and build binary
 
 build: ## Build the gh-pr-pro binary
 	go build -o $(BINARY_NAME) .
@@ -33,24 +33,30 @@ cover-text: ## Run tests and print coverage summary to terminal
 
 ##@ Quality & Pre-commit
 
-check: fmt-check vet test audit-readme audit-schema ## Run full pre-commit check (fmt, vet, test, audits)
+check: tidy-check lint test audit-readme audit-schema ## Run full pre-commit check (tidy, lint, test, audits)
 
 init-hooks: ## Configure git to use project pre-commit hooks (.githooks)
 	git config core.hooksPath .githooks
 	@chmod +x .githooks/* 2>/dev/null || true
 	@echo "Git hooks configured: core.hooksPath is set to .githooks"
 
-fmt: ## Format Go code with gofmt
-	gofmt -s -w .
-
-fmt-check: ## Verify Go code formatting without modifying files
-	@UNFORMATTED=$$(gofmt -s -l .); \
-	if [ -n "$$UNFORMATTED" ]; then \
-		echo "The following files require formatting:"; \
-		echo "$$UNFORMATTED"; \
-		echo "Please run 'make fmt' locally to format them."; \
+fmt: ## Format Go code with golangci-lint fmt (enforcing gofumpt)
+	@if ! command -v golangci-lint >/dev/null 2>&1; then \
+		echo "Error: golangci-lint is required for formatting to match CI."; \
+		echo "Install it via 'brew install golangci-lint' or see https://golangci-lint.run/welcome/install/"; \
 		exit 1; \
 	fi
+	golangci-lint fmt
+
+fmt-check: lint ## Verify Go code formatting (delegates to golangci-lint)
+
+lint: ## Run comprehensive static analysis with golangci-lint
+	@if ! command -v golangci-lint >/dev/null 2>&1; then \
+		echo "Error: golangci-lint is not installed."; \
+		echo "Install it via 'brew install golangci-lint' or see https://golangci-lint.run/welcome/install/"; \
+		exit 1; \
+	fi
+	golangci-lint run ./...
 
 vet: ## Run go vet static analysis
 	go vet ./...

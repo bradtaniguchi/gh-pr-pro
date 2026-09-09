@@ -12,6 +12,7 @@ To develop and test `gh-pr-pro`, ensure you have the following installed:
 
 - **Go**: `1.22+` (Go `1.24+` recommended). Verify with `go version`.
 - **GitHub CLI (`gh`)**: `v2.20.0+`. Verify with `gh version`.
+- **golangci-lint**: `v2.0+` recommended for static analysis (`brew install golangci-lint` or see [golangci-lint installation](https://golangci-lint.run/welcome/install/)).
 - **GitHub Account Authentication & Scopes**:
   ```bash
   # Check current auth status and granted token scopes
@@ -57,7 +58,7 @@ To develop and test `gh-pr-pro`, ensure you have the following installed:
    ```bash
    make init-hooks
    ```
-   This configures Git's native `core.hooksPath` to use `.githooks/pre-commit`, running `make check` (formatting, vet, race-detected tests, README audit, and schema validation) before each commit with zero external dependencies.
+   This configures Git's native `core.hooksPath` to use `.githooks/pre-commit`, running `make check` (module tidy check, static analysis, race-detected tests, README audit, and schema validation) before each commit.
 
 ---
 
@@ -72,8 +73,14 @@ make help
 # Configure project git pre-commit hooks (.githooks)
 make init-hooks
 
-# Format, vet, test, audit README & schemas, and build the binary
+# Tidy dependencies, lint, test, audit README & schemas, and build the binary
 make all
+
+# Run comprehensive static analysis with golangci-lint
+make lint
+
+# Format Go code with golangci-lint / gofumpt
+make fmt
 
 # Fast build of the extension binary
 make build
@@ -81,7 +88,7 @@ make build
 # Install binary to $GOPATH/bin
 make install
 
-# Pre-commit verification (fmt + vet + test + audit-readme + audit-schema)
+# Pre-commit verification (tidy + lint + test + audit-readme + audit-schema)
 make check
 
 # Audit README synchronization against CLI API surface

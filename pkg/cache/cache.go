@@ -89,7 +89,7 @@ func (cm *CacheManager) Save(repo string, prs []metrics.ProcessedPR) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
-	if err := os.MkdirAll(cm.baseDir, 0755); err != nil {
+	if err := os.MkdirAll(cm.baseDir, 0o755); err != nil {
 		return err
 	}
 
@@ -105,7 +105,7 @@ func (cm *CacheManager) Save(repo string, prs []metrics.ProcessedPR) error {
 		return err
 	}
 
-	return os.WriteFile(filePath, data, 0644)
+	return os.WriteFile(filePath, data, 0o600)
 }
 
 // GetBaseDir returns the base cache directory path.

@@ -84,7 +84,6 @@ func AggregateMetric(prs []ProcessedPR, domain, metric string, opts FilterOption
 //   - Total line diff boundaries (MinLines, MaxLines) and file count boundaries (MinFiles, MaxFiles)
 //   - Comma-separated label sets (all specified labels must match)
 func FilterPRs(prs []ProcessedPR, opts FilterOptions) []ProcessedPR {
-
 	var result []ProcessedPR
 	for _, pr := range prs {
 		// Time window filter on CreatedAt (or MergedAt if merged)
@@ -478,9 +477,10 @@ func computeMetricStats(prs []ProcessedPR, domain, metric string) GroupSummary {
 			closed := 0
 			opened := len(prs)
 			for _, pr := range prs {
-				if pr.State == "MERGED" {
+				switch pr.State {
+				case "MERGED":
 					merged++
-				} else if pr.State == "CLOSED" {
+				case "CLOSED":
 					closed++
 				}
 			}

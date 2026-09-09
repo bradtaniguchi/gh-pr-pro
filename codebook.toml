@@ -1,4 +1,5 @@
 words = [
     "Lifecycle",
     "cli",
+    "golangci",
 ]

@@ -29,14 +29,14 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      - name: Verify Go code formatting (gofmt)
-        run: make fmt-check
-
-      - name: Run static analysis (go vet)
-        run: make vet
-
       - name: Verify module dependencies (go mod tidy)
         run: make tidy-check
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          args: --timeout=5m
 
       - name: Verify README CLI documentation sync
         run: make audit-readme
