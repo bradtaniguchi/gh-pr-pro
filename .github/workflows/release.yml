@@ -14,9 +14,10 @@ jobs:
   release:
     name: Build & Publish Extension Release
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Precompile and publish release assets
         uses: cli/gh-extension-precompile@v2
