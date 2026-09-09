@@ -61,7 +61,7 @@ A `Makefile` is included to streamline common build, test, and formatting tasks:
 # Display all available Make targets
 make help
 
-# Format, vet, test, and build the binary
+# Format, vet, test, audit README, and build the binary
 make all
 
 # Fast build of the extension binary
@@ -70,8 +70,11 @@ make build
 # Install binary to $GOPATH/bin
 make install
 
-# Pre-commit verification (fmt + vet + test)
+# Pre-commit verification (fmt + vet + test + audit-readme)
 make check
+
+# Audit README synchronization against CLI API surface
+make audit-readme
 ```
 
 You can test commands locally against any public repository without changing directory:
@@ -157,6 +160,9 @@ gh pr-pro overview --past 30d --json -R cli/cli
 
 ```text
 gh-pr-pro/
+├── .agents/
+│   └── skills/
+│       └── readme-api-sync/      # AI skill to review & sync README on API surface changes
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml               # Continuous integration (lint, test matrix, build verification)
@@ -209,6 +215,9 @@ Follow these steps when contributing a new metric:
 5. **Write Unit Tests (`pkg/metrics/*_test.go`)**:
    Add test coverage for calculation and grouping.
 
+6. **Update Documentation & Verify with `readme-api-sync` Skill**:
+   Run the `readme-api-sync` skill (`.agents/skills/readme-api-sync/SKILL.md`) or `make audit-readme` to ensure `README.md` command trees and flag tables are updated.
+
 ---
 
 ## Code Style & Quality Guidelines
@@ -229,8 +238,8 @@ Follow these steps when contributing a new metric:
 ## Submitting Pull Requests
 
 1. Create a feature branch: `git checkout -b feat/my-new-metric`.
-2. Run pre-commit checks: `make check`.
-3. Ensure documentation (`README.md` and `PRD.md`) is updated if you modified or added command flags.
+2. Run pre-commit checks: `make check` (formats code, runs `go vet`, executes tests with `-race`, and audits README sync).
+3. Ensure documentation (`README.md`) is in sync if you modified or added command flags (verified automatically by `make audit-readme`).
 4. Submit your pull request on GitHub! CI will run formatting checks, `go vet`, multi-OS unit tests (`ubuntu`, `macos`, `windows`), and cross-platform compilation.
 
 ---

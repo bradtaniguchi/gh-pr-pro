@@ -26,8 +26,13 @@ This document provides architectural context, commands, coding standards, and in
 Agents should execute standard `make` targets or native `go` commands:
 
 ```bash
-# Pre-commit check: formats code, runs static analysis, and runs tests
+# Pre-commit check: formats code, runs static analysis, audits README sync, and runs tests
 make check
+
+# Audit README synchronization against CLI API surface
+make audit-readme
+# or directly:
+./.agents/skills/readme-api-sync/scripts/audit_readme.sh
 
 # Run all unit tests with race detection (standard test invocation)
 go test -race -count=1 ./...
@@ -73,6 +78,13 @@ make build
 ### 4. Grouping & Dimensions
 Supported `--group-by` dimensions are: `none`, `day`, `week`, `month`, `quarter`, `year`, `author`, `reviewer`, `label`, `base`, `size`. When adding new metrics, ensure [`pkg/metrics/aggregation.go`](file:///Users/brad/Projects/gh-pr-pro/pkg/metrics/aggregation.go) correctly formats summary and group records.
 
+### 5. Mandatory README Synchronization on API Surface Changes
+Whenever any change is made to the CLI API surface area (commands, subcommands, flags, shorthands, default values, filter parameters, or output schemas):
+- The agent **MUST** invoke and run the [`readme-api-sync`](file:///Users/brad/Projects/gh-pr-pro/.agents/skills/readme-api-sync/SKILL.md) skill.
+- Review and update [`README.md`](file:///Users/brad/Projects/gh-pr-pro/README.md) to keep flag scoping tables, command hierarchy trees, and subcommand references 100% in line with the code.
+- Verify synchronization by running `make audit-readme` (or `./.agents/skills/readme-api-sync/scripts/audit_readme.sh`).
+- Never conclude a change with un-synchronized CLI docs.
+
 ---
 
 ## 4. How to Add a New Metric Subcommand
@@ -85,7 +97,7 @@ When adding a metric subcommand (e.g., `gh pr-pro quality security`):
 4. **Aggregation**: Update [`computeMetricStats`](file:///Users/brad/Projects/gh-pr-pro/pkg/metrics/aggregation.go) to extract metric values and attach percentiles.
 5. **CLI Registration**: In `pkg/cmd/<domain>.go`, declare the subcommand calling `RunMetricCommand(cmd, "<domain>", "<metric>")` and register it in `init()`.
 6. **Tests**: Add table-driven unit tests in `pkg/metrics/*_test.go` and command flag tests in `pkg/cmd/root_test.go`.
-7. **Documentation**: Update `README.md` and `CONTRIBUTING.md` command reference tables.
+7. **Documentation**: Invoke the [`readme-api-sync`](file:///Users/brad/Projects/gh-pr-pro/.agents/skills/readme-api-sync/SKILL.md) skill to review and update [`README.md`](file:///Users/brad/Projects/gh-pr-pro/README.md) and [`CONTRIBUTING.md`](file:///Users/brad/Projects/gh-pr-pro/CONTRIBUTING.md) command reference tables, and verify with `make audit-readme`.
 
 ---
 
