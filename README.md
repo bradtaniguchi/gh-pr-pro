@@ -15,7 +15,7 @@
 ## Installation
 
 ```bash
-gh extension install <owner>/gh-pr-pro
+gh extension install bradtaniguchi/gh-pr-pro
 ```
 
 ---

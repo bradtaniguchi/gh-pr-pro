@@ -31,7 +31,7 @@ To develop and test `gh-pr-pro`, ensure you have the following installed:
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/<owner>/gh-pr-pro.git
+   git clone https://github.com/bradtaniguchi/gh-pr-pro.git
    cd gh-pr-pro
    ```
 
