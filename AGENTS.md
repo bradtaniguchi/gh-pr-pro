@@ -29,6 +29,9 @@ Run standard `make` targets or native `go` commands:
 # Pre-commit verification: format check, vet, tests, and audits
 make check
 
+# Configure Git pre-commit hooks (.githooks)
+make init-hooks
+
 # Run all unit tests with race detection
 go test -race -count=1 ./...
 

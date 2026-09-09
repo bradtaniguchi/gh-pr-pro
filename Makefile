@@ -1,6 +1,6 @@
 BINARY_NAME ?= gh-pr-pro
 
-.PHONY: all help build install test test-v cover cover-text vet fmt fmt-check tidy-check clean check doc audit-readme audit-schema check-cross-compile
+.PHONY: all help build install test test-v cover cover-text vet fmt fmt-check tidy-check clean check doc audit-readme audit-schema check-cross-compile init-hooks
 
 ##@ Build & Execution
 
@@ -34,6 +34,11 @@ cover-text: ## Run tests and print coverage summary to terminal
 ##@ Quality & Pre-commit
 
 check: fmt-check vet test audit-readme audit-schema ## Run full pre-commit check (fmt, vet, test, audits)
+
+init-hooks: ## Configure git to use project pre-commit hooks (.githooks)
+	git config core.hooksPath .githooks
+	@chmod +x .githooks/* 2>/dev/null || true
+	@echo "Git hooks configured: core.hooksPath is set to .githooks"
 
 fmt: ## Format Go code with gofmt
 	gofmt -s -w .

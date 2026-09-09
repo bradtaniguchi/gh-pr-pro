@@ -53,6 +53,12 @@ To develop and test `gh-pr-pro`, ensure you have the following installed:
    gh pr-pro --help
    ```
 
+4. **Initialize Git pre-commit hooks** (recommended):
+   ```bash
+   make init-hooks
+   ```
+   This configures Git's native `core.hooksPath` to use `.githooks/pre-commit`, running `make check` (formatting, vet, race-detected tests, README audit, and schema validation) before each commit with zero external dependencies.
+
 ---
 
 ## Development Workflow
@@ -62,6 +68,9 @@ A `Makefile` is included to streamline common build, test, and formatting tasks:
 ```bash
 # Display all available Make targets
 make help
+
+# Configure project git pre-commit hooks (.githooks)
+make init-hooks
 
 # Format, vet, test, audit README & schemas, and build the binary
 make all
@@ -174,6 +183,8 @@ gh-pr-pro/
 │       ├── add-metric/             # AI skill to scaffold & integrate new metric subcommands
 │       ├── schema-regression-test/ # AI skill to audit & verify output schemas (JSON/CSV/TSV/MD)
 │       └── release-prep/           # AI skill for cross-compile verification, notes & tagging
+├── .githooks/
+│   └── pre-commit                 # Zero-dependency pre-commit verification hook
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                 # Continuous integration (lint, test matrix, build verification)
@@ -257,6 +268,7 @@ Follow the [`add-metric`](file:///Users/brad/Projects/gh-pr-pro/.agents/skills/a
 
 ## Submitting Pull Requests
 
-1. Create a feature branch: `git checkout -b feat/my-new-metric`.
-2. Ensure pre-commit checks pass: `make check`.
-3. Push to your fork and submit a Pull Request against `main`.
+1. Initialize git pre-commit hooks (if not done yet): `make init-hooks`.
+2. Create a feature branch: `git checkout -b feat/my-new-metric`.
+3. Ensure pre-commit checks pass: `make check`.
+4. Push to your fork and submit a Pull Request against `main`.
