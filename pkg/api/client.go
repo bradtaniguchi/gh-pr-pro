@@ -259,7 +259,7 @@ func (c *Client) FetchPRs(owner, name string, since time.Time, maxPRs int) ([]Gr
 // It paginates backwards through repository PRs, stopping early when a PR's
 // UpdatedAt is older than lastUpdated or CreatedAt is older than since.
 // This minimizes API payload sizes and saves rate limit quota when syncing against existing cache entries.
-func (c *Client) FetchPRsDelta(owner, name string, since time.Time, lastUpdated time.Time, maxPRs int) ([]GraphQLPRNode, error) {
+func (c *Client) FetchPRsDelta(owner, name string, since, lastUpdated time.Time, maxPRs int) ([]GraphQLPRNode, error) {
 	var allNodes []GraphQLPRNode
 	var cursor *string
 	pageSize := c.PageSize

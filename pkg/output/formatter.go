@@ -210,7 +210,6 @@ func truncate(str string, maxLen int) string {
 //
 // Useful for piping raw PR telemetry into data pipelines, pandas, DuckDB, or data warehouses.
 func RenderRawExport(w io.Writer, prs []metrics.ProcessedPR, format string) error {
-
 	if strings.ToLower(format) == "csv" {
 		writer := csv.NewWriter(w)
 		defer writer.Flush()
