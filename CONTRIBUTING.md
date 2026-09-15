@@ -58,7 +58,7 @@ To develop and test `gh-pr-pro`, ensure you have the following installed:
    ```bash
    make init-hooks
    ```
-   This configures Git's native `core.hooksPath` to use `.githooks/pre-commit`, running `make check` (module tidy check, static analysis, race-detected tests, README audit, and schema validation) before each commit.
+   This configures Git's native `core.hooksPath` to use `.githooks/pre-commit`, running `make check` (module tidy check, static analysis, pinned vulnerability scan, race-detected tests, README audit, and schema validation) before each commit.
 
 ---
 
@@ -79,6 +79,9 @@ make all
 # Run comprehensive static analysis with golangci-lint
 make lint
 
+# Run the pinned govulncheck vulnerability scanner
+make vulncheck
+
 # Format Go code with golangci-lint / gofumpt
 make fmt
 
@@ -88,7 +91,7 @@ make build
 # Install binary to $GOPATH/bin
 make install
 
-# Pre-commit verification (tidy + lint + test + audit-readme + audit-schema)
+# Pre-commit verification (tidy + lint + vulncheck + test + audit-readme + audit-schema)
 make check
 
 # Audit README synchronization against CLI API surface
@@ -196,10 +199,12 @@ gh-pr-pro/
 │   ├── ISSUE_TEMPLATE/
 │   │   ├── bug_report.md          # Bug report issue template
 │   │   └── feature_request.md     # Feature request issue template
+│   ├── dependabot.yml             # Automated dependency and GitHub Actions update config
 │   ├── pull_request_template.md   # PR verification checklist template
 │   └── workflows/
 │       ├── ci.yml                 # Continuous integration (lint, test matrix, build verification)
-│       └── release.yml            # Automated release packaging via cli/gh-extension-precompile
+│       ├── release.yml            # Automated release packaging via cli/gh-extension-precompile
+│       └── security.yml           # Scheduled and PR-triggered govulncheck verification
 ├── CODE_OF_CONDUCT.md             # Contributor Covenant Code of Conduct
 ├── SECURITY.md                    # Security vulnerability disclosure policy
 ├── main.go                       # Application entry point

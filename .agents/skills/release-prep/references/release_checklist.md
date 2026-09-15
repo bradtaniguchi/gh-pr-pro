@@ -7,7 +7,7 @@ Use this checklist during every release cycle for `gh-pr-pro`.
 ## 1. Pre-Release Verification
 - [ ] Working tree is clean (`git status -s` produces no output)
 - [ ] On `main` branch with latest remote commits pulled
-- [ ] `make check` passes (`gofmt`, `go vet`, `go test -race`, `make audit-readme`)
+- [ ] `make check` passes (`make tidy-check`, `make lint`, `make vulncheck`, `go test -race`, `make audit-readme`, `make audit-schema`)
 - [ ] `./.agents/skills/schema-regression-test/scripts/verify_schemas.sh` passes (all 7 output schemas verified)
 - [ ] Cross-compilation passes for all 5 targets:
   - `linux/amd64`
