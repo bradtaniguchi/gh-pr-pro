@@ -204,7 +204,7 @@ gh-pr-pro/
 │   └── workflows/
 │       ├── ci.yml                 # Continuous integration (lint, test matrix, build verification)
 │       ├── release.yml            # Automated release packaging via cli/gh-extension-precompile
-│       └── security.yml           # Scheduled and PR-triggered govulncheck verification
+│       └── security.yml           # Scheduled weekly govulncheck dependency vulnerability scan
 ├── CODE_OF_CONDUCT.md             # Contributor Covenant Code of Conduct
 ├── SECURITY.md                    # Security vulnerability disclosure policy
 ├── main.go                       # Application entry point
