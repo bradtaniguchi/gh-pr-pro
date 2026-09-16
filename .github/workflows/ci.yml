@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   lint:
-    name: Lint & Static Analysis
+    name: Lint, Static Analysis & Vulnerability Scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -37,6 +37,9 @@ jobs:
         with:
           version: latest
           args: --timeout=5m
+
+      - name: Run pinned govulncheck
+        run: make vulncheck
 
       - name: Verify README CLI documentation sync
         run: make audit-readme

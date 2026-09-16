@@ -26,7 +26,7 @@ This document provides architectural context, commands, and invariant rules for 
 Run standard `make` targets or native `go` commands:
 
 ```bash
-# Pre-commit verification: module tidy check, static analysis, race-detected tests, and audits
+# Pre-commit verification: module tidy check, static analysis, vulnerability scan, race-detected tests, and audits
 make check
 
 # Configure Git pre-commit hooks (.githooks)
@@ -44,8 +44,9 @@ make cover-text
 # Format Go code (strictly enforces gofumpt via golangci-lint)
 make fmt
 
-# Run comprehensive static analysis
+# Run static analysis and security vulnerability scan
 make lint
+make vulncheck
 
 # Build local binary
 make build

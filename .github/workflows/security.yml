@@ -1,0 +1,33 @@
+name: Security (Cron)
+
+on:
+  schedule:
+    # Run weekly on Mondays at 12:00 UTC to detect newly disclosed CVEs
+    # affecting dependencies even if no code changes occurred.
+    - cron: '0 12 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Run pinned govulncheck
+        run: make vulncheck
