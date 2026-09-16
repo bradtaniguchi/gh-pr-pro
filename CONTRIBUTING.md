@@ -297,3 +297,63 @@ Follow the [`add-metric`](file:///Users/brad/Projects/gh-pr-pro/.agents/skills/a
 2. Create a feature branch: `git checkout -b feat/my-new-metric`.
 3. Ensure pre-commit checks pass: `make check`.
 4. Push to your fork and submit a Pull Request against `main` using the provided [pull request template](.github/pull_request_template.md).
+
+---
+
+## Release & Publishing Process
+
+Maintainers follow this workflow to publish new versions of `gh-pr-pro` as a GitHub CLI extension:
+
+### 1. Ensure Repository Discoverability
+Ensure the repository has the `gh-extension` topic so it is discoverable via `gh extension search` and `gh extension browse`:
+```bash
+gh repo edit bradtaniguchi/gh-pr-pro --add-topic gh-extension
+```
+
+### 2. Pre-Release Verification Gate
+Before tagging a release, ensure all checks, schema contracts, and cross-platform builds succeed on `main`:
+```bash
+# Ensure working tree is clean and up to date
+git checkout main && git pull origin main
+
+# Run full CI quality checks (linting, vulnerability scan, tests with race detector)
+make check
+
+# Verify output schemas (JSON/CSV/TSV/Markdown)
+make audit-schema
+
+# Verify cross-compilation across all 5 OS/architecture targets (Darwin, Linux, Windows)
+make check-cross-compile
+```
+
+### 3. Tag and Publish Semantic Version
+Releases adhere to [Semantic Versioning](https://semver.org/) (`vMAJOR.MINOR.PATCH`):
+- **PATCH** (`v0.1.1`): Bug fixes, internal refactors, documentation updates.
+- **MINOR** (`v0.2.0`): New metric commands, new flags, new export formats.
+- **MAJOR** (`v1.0.0`): Breaking CLI changes or schema alterations.
+
+Create and push an annotated git tag:
+```bash
+# Create annotated tag
+git tag -a v0.1.0 -m "Release v0.1.0"
+
+# Push tag to trigger release workflow
+git push origin v0.1.0
+```
+
+### 4. Automated Release Pipeline
+Pushing a `v*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which uses the official `cli/gh-extension-precompile@v2` action to:
+1. Compile multi-platform binaries (`linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`).
+2. Generate SHA256 checksums.
+3. Attach precompiled binary assets to the newly created GitHub Release.
+
+### 5. Verify Installation
+Once the GitHub Actions workflow completes, test installing and running the published release:
+```bash
+# Install or upgrade the extension
+gh extension install bradtaniguchi/gh-pr-pro
+
+# Verify binary execution
+gh pr-pro --help
+```
+
