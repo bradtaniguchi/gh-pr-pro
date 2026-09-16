@@ -300,6 +300,26 @@ Follow the [`add-metric`](file:///Users/brad/Projects/gh-pr-pro/.agents/skills/a
 
 ---
 
+## Interacting with Dependabot via PR Comments
+
+When managing automated dependency pull requests created by Dependabot, you can trigger specific actions by commenting directly on the PR with command tags:
+
+| Comment Tag | Description / Action |
+|---|---|
+| `@dependabot rebase` | Rebases the PR branch on top of the latest `main` branch to resolve merge conflicts. |
+| `@dependabot recreate` | Recreates the PR from scratch, discarding any manual modifications that may have been made to the branch. |
+| `@dependabot merge` | Automatically merges the PR once all required status checks pass. |
+| `@dependabot squash and merge` | Automatically squashes and merges the PR once all required status checks pass. |
+| `@dependabot rebase and merge` | Automatically rebases and merges the PR once all required status checks pass. |
+| `@dependabot cancel merge` | Cancels a previously requested automatic merge command. |
+| `@dependabot reopen` | Reopens a closed pull request and recreates the underlying branch if it was deleted. |
+| `@dependabot ignore this major version` | Closes the PR and stops Dependabot from proposing any updates for this major version. |
+| `@dependabot ignore this minor version` | Closes the PR and stops Dependabot from proposing any updates for this minor version. |
+| `@dependabot ignore this dependency` | Closes the PR and stops Dependabot from proposing any further updates for this dependency. |
+| `@dependabot show <dependency name> ignore conditions` | Explains all active ignore conditions currently configured for the specified dependency. |
+
+---
+
 ## Release & Publishing Process
 
 Maintainers follow this workflow to publish new versions of `gh-pr-pro` as a GitHub CLI extension:
