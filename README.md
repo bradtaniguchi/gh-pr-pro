@@ -8,7 +8,7 @@
 `gh-pr-pro` organizes pull request analytics into structured top-level domains (`time`, `quality`, `code`, `team`) with dedicated metric subcommands. It delivers statistical percentiles (p50, p75, p90, p99), historical trends, and uniform multi-format exports (`text`, `json`, `csv`, `tsv`, `markdown`).
 
 > [!WARNING]
-> **GitHub API Rate Limits**: Analyzing large repositories or expansive historical time ranges queries GitHub's GraphQL API extensively. While `gh-pr-pro` incorporates automatic backoff and persistent local disk caching to minimize requests, queries are subject to GitHub's primary point quotas and secondary computation limits. See [Rate Limits & GraphQL Query Economics](#rate-limits--graphql-query-economics) for quota economics and mitigation details.
+> **API Rate Limits & 10-Second Request Timeout**: Analyzing large repositories or expansive historical time ranges queries GitHub's GraphQL API. Queries are subject to GitHub's primary point quotas (check anytime with `gh api rate_limit`) and a strict **10-second per-request execution timeout** on GitHub's backend. `gh-pr-pro` defaults to `--page-size 25` and uses local disk caching to prevent timeouts and preserve quota. See [Rate Limits & GraphQL Query Economics](#rate-limits--graphql-query-economics) for details and tuning guidance.
 
 ---
 
@@ -400,6 +400,15 @@ GitHub's GraphQL API uses a **point-based rate limit system** and enforces stric
 * **Hourly Quota**:
   * **5,000 points/hour** for personal user tokens and standard GitHub CLI logins (`gh auth login`).
   * **10,000 points/hour** for GitHub Enterprise Cloud and GitHub Apps.
+* **Inspecting Your Live Quota**:
+  You can check your remaining points, consumption, and reset timestamp directly using GitHub CLI:
+  ```bash
+  # Check overall rate limit quota across all GitHub API resources
+  gh api rate_limit
+
+  # Check GraphQL API quota only (used by gh-pr-pro)
+  gh api rate_limit --jq '.resources.graphql'
+  ```
 * **Point Cost per Query**:
   * GitHub evaluates the total number of node connections and nested sub-fields requested.
   * In `gh-pr-pro`, each page request fetches rich PR metadata (commits, CI status check rollups, reviews, review requests, and draft timeline events).
@@ -412,7 +421,10 @@ GitHub's GraphQL API uses a **point-based rate limit system** and enforces stric
 
 ### The 10-Second GraphQL Execution Limit & Page Size Tuning
 
-GitHub enforces a hard **10-second backend execution timeout** on any individual GraphQL query. 
+> [!NOTE]
+> **Quota vs. Execution Timeout**: An hourly rate limit exhaustion returns `HTTP 403 / 429`, whereas an individual query execution timeout returns `HTTP 504 Gateway Timeout`. Even with thousands of quota points remaining (checked via `gh api rate_limit`), an individual query can still time out if it takes longer than 10 seconds on GitHub's backend.
+
+GitHub enforces a hard **10-second backend execution timeout** on any individual GraphQL query.
 
 #### Why Query Complexity Matters
 Each PR node requests nested sub-trees:
@@ -440,7 +452,7 @@ If a query encounters transient timeouts or 502/504 errors, `gh-pr-pro` automati
 ### Troubleshooting & Common Issues
 
 #### ⚠️ `GitHub API request throttled or transient error: HTTP 504`
-* **Cause**: GitHub's backend exceeded its 10-second query computation limit for the requested page size on a large repository.
+* **Cause**: An individual GraphQL query exceeded GitHub's 10-second backend computation deadline. This is a per-request execution limit, not an hourly quota limit.
 * **Remediation**:
   1. **Lower Page Size**: Run with `--page-size 25` (or `--page-size 10` for extremely dense monorepos):
      ```bash
@@ -448,6 +460,16 @@ If a query encounters transient timeouts or 502/504 errors, `gh-pr-pro` automati
      ```
   2. **Enable Disk Caching (Omit `--no-cache`)**: Allow `gh-pr-pro` to store local cache. Subsequent runs will only query recent updates via delta sync instead of paginating complete history.
   3. **Narrow Time Window**: Use `--past 30d` or `--since YYYY-MM-DD` to reduce the number of historical records evaluated.
+
+#### ⚠️ `Rate Limit Exceeded (HTTP 403 / 429)`
+* **Cause**: Your account's 5,000 points/hour GraphQL quota has been exhausted.
+* **Remediation**:
+  1. **Check Quota & Reset Time**:
+     ```bash
+     gh api rate_limit --jq '.resources.graphql'
+     ```
+  2. **Rely on Local Cache**: `gh-pr-pro` automatically falls back to locally cached PR records if the API is exhausted.
+  3. **Wait for Reset**: Points replenish automatically at the `reset` timestamp.
 
 ---
 
