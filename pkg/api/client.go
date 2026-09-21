@@ -44,7 +44,7 @@ func NewClient() (*Client, error) {
 	}
 	return &Client{
 		gqlClient: gql,
-		PageSize:  100,
+		PageSize:  25,
 	}, nil
 }
 
@@ -58,10 +58,10 @@ func (c *Client) SetVerbose(verbose bool) {
 	c.Verbose = verbose
 }
 
-// SetPageSize configures the GraphQL query page size (clamped between 1 and 100).
+// SetPageSize configures the GraphQL query page size (clamped between 1 and 100, default 25).
 func (c *Client) SetPageSize(pageSize int) {
 	if pageSize <= 0 {
-		c.PageSize = 100
+		c.PageSize = 25
 	} else if pageSize > 100 {
 		c.PageSize = 100
 	} else {
@@ -277,7 +277,9 @@ func (c *Client) FetchPRsDelta(owner, name string, since, lastUpdated time.Time,
 	var allNodes []GraphQLPRNode
 	var cursor *string
 	pageSize := c.PageSize
-	if pageSize <= 0 || pageSize > 100 {
+	if pageSize <= 0 {
+		pageSize = 25
+	} else if pageSize > 100 {
 		pageSize = 100
 	}
 	if maxPRs > 0 && maxPRs < pageSize {

@@ -302,14 +302,14 @@ func TestSetPageSize(t *testing.T) {
 			expectedSize: 50,
 		},
 		{
-			name:         "zero page size resets to 100",
+			name:         "zero page size resets to 25",
 			inputSize:    0,
-			expectedSize: 100,
+			expectedSize: 25,
 		},
 		{
-			name:         "negative page size resets to 100",
+			name:         "negative page size resets to 25",
 			inputSize:    -5,
-			expectedSize: 100,
+			expectedSize: 25,
 		},
 		{
 			name:         "page size exceeding 100 clamped to 100",

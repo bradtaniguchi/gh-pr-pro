@@ -56,7 +56,7 @@ Available across **all** commands and subcommands (including `time`, `quality`, 
 | `--repo` | `-R` | current | Target repository in `[HOST/]OWNER/REPO` format (defaults to current git repository) |
 | `--no-cache` | | `false` | Bypass local disk cache (`~/.cache/gh-pr-pro/`) and force a complete fresh fetch from GitHub API |
 | `--verbose` | `-v` | `false` | Print verbose progress, timestamped network latency, and cache activity logs to stderr |
-| `--page-size` | | `100` | GraphQL page size for PR queries (1 to 100 max) |
+| `--page-size` | | `25` | GraphQL page size for PR queries (1 to 100 max, default: 25). Lower values (10–30) avoid GitHub 10s query execution timeouts / HTTP 504 on large repositories |
 
 ### 2. Domain / Metric Flags
 Available on metric domain commands (`time`, `quality`, `code`, `team`), `overview`, and `export`.
@@ -394,19 +394,60 @@ group_key,count,p50_hours,p75_hours,p90_hours,mean_hours
 
 ## Rate Limits & GraphQL Query Economics
 
-GitHub's GraphQL API uses a **point-based rate limit system** rather than simple request counting:
+GitHub's GraphQL API uses a **point-based rate limit system** and enforces strict backend execution time limits:
 
 ### How Point Calculations Work
 * **Hourly Quota**:
   * **5,000 points/hour** for personal user tokens and standard GitHub CLI logins (`gh auth login`).
   * **10,000 points/hour** for GitHub Enterprise Cloud and GitHub Apps.
-* **Query Cost Calculation**:
-  * GitHub evaluates the total number of node connections and nested sub-fields requested in the query.
-  * In `gh-pr-pro`, each page request fetches up to 100 PRs with deeply nested sub-entities (commits, CI status check rollups, reviews, review requests, and draft timeline events).
-  * Each paginated query batch costs approximately **4 to 7 points** (returned in `rateLimit { cost remaining resetAt }`).
+* **Point Cost per Query**:
+  * GitHub evaluates the total number of node connections and nested sub-fields requested.
+  * In `gh-pr-pro`, each page request fetches rich PR metadata (commits, CI status check rollups, reviews, review requests, and draft timeline events).
+  * With `--page-size 25`, each query batch costs approximately **2 points** (returned in `rateLimit { cost remaining resetAt }`).
 * **Effective Query Volume**:
-  $$\frac{5{,}000 \text{ points/hour}}{\sim 5\text{--}7 \text{ points/query}} \approx \mathbf{700\text{ to }1{,}000 \text{ pages/hour}} \ (\approx \mathbf{70{,}000\text{ to }100{,}000 \text{ PRs/hour}})$$
+  $$\frac{5{,}000 \text{ points/hour}}{\sim 2 \text{ points/query}} \approx \mathbf{2{,}500 \text{ pages/hour}} \ (\approx \mathbf{62{,}500 \text{ PRs/hour}})$$
 * **Secondary Rate Limits**: GitHub limits backend CPU execution time to **60 seconds of computation per 60-second sliding window**. `gh-pr-pro` includes exponential backoff ($2\text{s} \to 4\text{s} \to 8\text{s}$) to avoid triggering burst throttling.
+
+---
+
+### The 10-Second GraphQL Execution Limit & Page Size Tuning
+
+GitHub enforces a hard **10-second backend execution timeout** on any individual GraphQL query. 
+
+#### Why Query Complexity Matters
+Each PR node requests nested sub-trees:
+* Up to 30 reviews (including bodies and timestamps)
+* Up to 20 CI check run / status context entries per latest commit
+* Up to 10 review requests and 30 draft conversion timeline events
+
+In large repositories with thousands of PRs and massive CI matrices (e.g. `cli/cli`, `kubernetes/kubernetes`), requesting `100` PRs at once requires GitHub's database to resolve tens of thousands of joined records in a single query. When resolution exceeds 10 seconds, GitHub's edge proxy terminates the connection with an `HTTP 504 Gateway Timeout`.
+
+#### Page Size Recommendations & Trade-offs
+
+| Page Size (`--page-size`) | Typical Latency | Point Cost | Recommended Repository Profile | 10s Timeout (HTTP 504) Risk |
+|---|---|---|---|---|
+| **`10 – 25` (Default: `25`)** | **1.0s – 2.5s** | **~2 points** | Large repositories, monorepos, high CI check volume | **Near Zero** |
+| **`30 – 50`** | **2.5s – 5.0s** | **~3–4 points** | Medium repositories with moderate review activity | Low |
+| **`75 – 100`** | **6.0s – 12.0s+** | **~5–7 points** | Small or low-activity repositories only | **High on large repos** |
+
+#### Automatic Adaptive Fallback
+If a query encounters transient timeouts or 502/504 errors, `gh-pr-pro` automatically:
+1. Retries up to 3 times with exponential backoff ($2\text{s} \to 4\text{s} \to 8\text{s}$).
+2. Halves the active `pageSize` (e.g. from 100 down to 50, 25, or 10) to recover automatically without user intervention.
+
+---
+
+### Troubleshooting & Common Issues
+
+#### ⚠️ `GitHub API request throttled or transient error: HTTP 504`
+* **Cause**: GitHub's backend exceeded its 10-second query computation limit for the requested page size on a large repository.
+* **Remediation**:
+  1. **Lower Page Size**: Run with `--page-size 25` (or `--page-size 10` for extremely dense monorepos):
+     ```bash
+     gh pr-pro overview --repo cli/cli --page-size 25
+     ```
+  2. **Enable Disk Caching (Omit `--no-cache`)**: Allow `gh-pr-pro` to store local cache. Subsequent runs will only query recent updates via delta sync instead of paginating complete history.
+  3. **Narrow Time Window**: Use `--past 30d` or `--since YYYY-MM-DD` to reduce the number of historical records evaluated.
 
 ---
 

@@ -149,7 +149,7 @@ type FilterOptions struct {
 	NoCache bool
 	// Verbose outputs detailed timestamped network and execution progress logs to stderr.
 	Verbose bool
-	// PageSize configures the GraphQL API page size for PR fetching (1-100, default: 100).
+	// PageSize configures the GraphQL API page size for PR fetching (1-100, default: 25).
 	PageSize int
 
 	// Search & Advanced Filter Options

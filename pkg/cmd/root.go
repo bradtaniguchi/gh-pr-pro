@@ -98,7 +98,7 @@ func init() {
 	RootCmd.PersistentFlags().StringVarP(&flagRepo, "repo", "R", "", "Target repository in '[HOST/]OWNER/REPO' format (defaults to current repository)")
 	RootCmd.PersistentFlags().BoolVar(&flagNoCache, "no-cache", false, "Bypass local disk cache (~/.cache/gh-pr-pro/) and force a complete fresh fetch from GitHub API")
 	RootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "Print verbose progress, timestamped network latency, and cache activity to stderr")
-	RootCmd.PersistentFlags().IntVar(&flagPageSize, "page-size", 100, "GraphQL page size for fetching pull requests (1-100, default: 100)")
+	RootCmd.PersistentFlags().IntVar(&flagPageSize, "page-size", 25, "GraphQL page size for fetching pull requests (1-100, default: 25; lower values avoid GitHub 10s query timeouts / HTTP 504 on large repos)")
 
 	// Attach scoped time, filter, and output flags to metric domain command roots
 	metricRoots := []*cobra.Command{
@@ -222,7 +222,9 @@ func getIntFlag(cmd *cobra.Command, name string) int {
 // Returns a populated FilterOptions struct or an error if date or duration flags cannot be parsed.
 func ParseFilterOptions(cmd *cobra.Command) (metrics.FilterOptions, error) {
 	pageSize := getIntFlag(cmd, "page-size")
-	if pageSize <= 0 || pageSize > 100 {
+	if pageSize <= 0 {
+		pageSize = 25
+	} else if pageSize > 100 {
 		pageSize = 100
 	}
 

@@ -87,7 +87,7 @@ func createTestCommand() *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&flagRepo, "repo", "R", "", "Target repository")
 	cmd.PersistentFlags().BoolVar(&flagNoCache, "no-cache", false, "Bypass local disk cache")
 	cmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "Print verbose progress")
-	cmd.PersistentFlags().IntVar(&flagPageSize, "page-size", 100, "GraphQL page size")
+	cmd.PersistentFlags().IntVar(&flagPageSize, "page-size", 25, "GraphQL page size")
 	attachTimeFlags(cmd)
 	attachFilterFlags(cmd)
 	attachOutputFlags(cmd)
@@ -693,7 +693,7 @@ func TestOverviewAndExportCommands_Cached(t *testing.T) {
 			cmd.PersistentFlags().StringVarP(&flagRepo, "repo", "R", "", "Target repository")
 			cmd.PersistentFlags().BoolVar(&flagNoCache, "no-cache", false, "Bypass local disk cache")
 			cmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "Print verbose progress")
-			cmd.PersistentFlags().IntVar(&flagPageSize, "page-size", 100, "GraphQL page size")
+			cmd.PersistentFlags().IntVar(&flagPageSize, "page-size", 25, "GraphQL page size")
 
 			args := []string{"--repo", repo, "--format", format}
 			if err := cmd.ParseFlags(args); err != nil {
@@ -715,7 +715,7 @@ func TestOverviewAndExportCommands_Cached(t *testing.T) {
 			cmd.PersistentFlags().StringVarP(&flagRepo, "repo", "R", "", "Target repository")
 			cmd.PersistentFlags().BoolVar(&flagNoCache, "no-cache", false, "Bypass local disk cache")
 			cmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "Print verbose progress")
-			cmd.PersistentFlags().IntVar(&flagPageSize, "page-size", 100, "GraphQL page size")
+			cmd.PersistentFlags().IntVar(&flagPageSize, "page-size", 25, "GraphQL page size")
 
 			args := []string{"--repo", repo, "--format", format}
 			if err := cmd.ParseFlags(args); err != nil {
