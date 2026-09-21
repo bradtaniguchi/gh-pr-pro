@@ -1,11 +1,9 @@
 # `gh-pr-pro`
 
-> Advanced Pull Request Analytics & Engineering Intelligence extension for the GitHub CLI (`gh`).
-
 [![GitHub CLI Extension](https://img.shields.io/badge/gh-extension-blue.svg)](https://docs.github.com/en/github-cli/github-cli/creating-github-cli-extensions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-`gh-pr-pro` organizes pull request analytics into structured top-level domains (`time`, `quality`, `code`, `team`) with dedicated metric subcommands. It delivers statistical percentiles (p50, p75, p90, p99), historical trends, and uniform multi-format exports (`text`, `json`, `csv`, `tsv`, `markdown`).
+Github CLI extension to provide extensive pull request metrics, with built in caching, csv/json/text output with extensive filtering.
 
 > [!WARNING]
 > **API Rate Limits & 10-Second Request Timeout**: Analyzing large repositories or expansive historical time ranges queries GitHub's GraphQL API. Queries are subject to GitHub's primary point quotas (check anytime with `gh api rate_limit`) and a strict **10-second per-request execution timeout** on GitHub's backend. `gh-pr-pro` defaults to `--page-size 25` and uses local disk caching to prevent timeouts and preserve quota. See [Rate Limits & GraphQL Query Economics](#rate-limits--graphql-query-economics) for details and tuning guidance.
