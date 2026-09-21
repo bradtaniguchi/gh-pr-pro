@@ -13,6 +13,7 @@ import (
 	"github.com/brad/gh-pr-pro/pkg/cache"
 	"github.com/brad/gh-pr-pro/pkg/metrics"
 	"github.com/brad/gh-pr-pro/pkg/output"
+	"github.com/brad/gh-pr-pro/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -407,6 +408,10 @@ func FetchAndProcessPRs(opts metrics.FilterOptions) ([]metrics.ProcessedPR, erro
 
 	client, err := api.NewClient()
 	if err != nil {
+		if len(cachedPRs) > 0 {
+			logCmdVerbose("API client initialization failed (%v). Falling back gracefully to %d cached PRs.", err, len(cachedPRs))
+			return cachedPRs, nil
+		}
 		return nil, err
 	}
 	client.SetVerbose(opts.Verbose)
@@ -414,8 +419,21 @@ func FetchAndProcessPRs(opts metrics.FilterOptions) ([]metrics.ProcessedPR, erro
 		client.SetPageSize(opts.PageSize)
 	}
 
+	var sp *ui.Spinner
+	if !opts.Verbose {
+		sp = ui.NewSpinner(fmt.Sprintf("Fetching pull requests for %s...", repoFullName))
+		client.SetProgressFunc(func(page int, prCount int) {
+			sp.SetMessage(fmt.Sprintf("Fetching pull requests for %s (page %d, %d PRs)...", repoFullName, page, prCount))
+		})
+		sp.Start()
+		defer sp.Stop()
+	}
+
 	// Fetch fresh PRs from GitHub GraphQL with delta sync and rate limit safety
 	nodes, err := client.FetchPRsDelta(repo.Owner, repo.Name, opts.Since, lastFetched, 2000)
+	if sp != nil {
+		sp.Stop()
+	}
 	if err != nil {
 		// If network error but we have cache, fallback gracefully
 		if len(cachedPRs) > 0 {

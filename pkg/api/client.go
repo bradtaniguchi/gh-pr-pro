@@ -15,12 +15,21 @@ import (
 	ghrepo "github.com/cli/go-gh/v2/pkg/repository"
 )
 
+// ProgressFunc defines a callback function invoked during pagination to report progress.
+// page indicates the 1-based page number, and prCount indicates the cumulative count of PRs retrieved so far.
+type ProgressFunc func(page int, prCount int)
+
+type gqlClient interface {
+	Do(query string, variables map[string]interface{}, response interface{}) error
+}
+
 // Client wraps the GitHub CLI GraphQL client to execute queries against the GitHub GraphQL API.
 // It includes built-in retry logic, rate limit awareness, and pagination helpers for pull request datasets.
 type Client struct {
-	gqlClient *ghapi.GraphQLClient
-	Verbose   bool
-	PageSize  int
+	gqlClient  gqlClient
+	Verbose    bool
+	PageSize   int
+	progressFn ProgressFunc
 }
 
 // NewClient initializes and returns a new GitHub GraphQL API Client using go-gh authentication.
@@ -37,6 +46,11 @@ func NewClient() (*Client, error) {
 		gqlClient: gql,
 		PageSize:  100,
 	}, nil
+}
+
+// SetProgressFunc configures a callback to be invoked whenever a pagination page is requested or received.
+func (c *Client) SetProgressFunc(fn ProgressFunc) {
+	c.progressFn = fn
 }
 
 // SetVerbose configures whether verbose diagnostic timestamps and progress logs are written to stderr.
@@ -297,6 +311,9 @@ func (c *Client) FetchPRsDelta(owner, name string, since, lastUpdated time.Time,
 
 		c.logVerbose("Requesting page %d (pageSize: %d, total fetched so far: %d)...",
 			pageNum, pageSize, len(allNodes))
+		if c.progressFn != nil {
+			c.progressFn(pageNum, len(allNodes))
+		}
 		pageStart := time.Now()
 
 		var response GraphQLRepoPRResponse
@@ -321,11 +338,6 @@ func (c *Client) FetchPRsDelta(owner, name string, since, lastUpdated time.Time,
 		c.logVerbose("Page %d received in %v (%d PRs returned | rate limit remaining: %d, cost: %d)",
 			pageNum, pageDuration.Round(time.Millisecond), len(prs), response.RateLimit.Remaining, response.RateLimit.Cost)
 
-		if len(prs) == 0 {
-			c.logVerbose("Page %d returned 0 PRs. Stopping pagination.", pageNum)
-			break
-		}
-
 		shouldStop := false
 		var stopReason string
 		for _, node := range prs {
@@ -349,6 +361,15 @@ func (c *Client) FetchPRsDelta(owner, name string, since, lastUpdated time.Time,
 					node.Number, node.CreatedAt.Format("2006-01-02 15:04:05"), since.Format("2006-01-02 15:04:05"))
 				break
 			}
+		}
+
+		if c.progressFn != nil {
+			c.progressFn(pageNum, len(allNodes))
+		}
+
+		if len(prs) == 0 {
+			c.logVerbose("Page %d returned 0 PRs. Stopping pagination.", pageNum)
+			break
 		}
 
 		if shouldStop {

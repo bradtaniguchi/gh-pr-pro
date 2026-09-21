@@ -1,9 +1,13 @@
 package cmd
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/brad/gh-pr-pro/pkg/cache"
+	"github.com/brad/gh-pr-pro/pkg/metrics"
+	"github.com/brad/gh-pr-pro/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -481,4 +485,288 @@ type metricsFilterOptionsHelper = struct {
 	MinFiles        int
 	MaxFiles        int
 	HasConflicts    string
+}
+
+func TestFetchAndProcessPRs(t *testing.T) {
+	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+	merged1 := now.Add(-24 * time.Hour)
+	merged2 := now.Add(-12 * time.Hour)
+	mockPRs := []metrics.ProcessedPR{
+		{
+			Number:    101,
+			Title:     "Feature authentication",
+			State:     "MERGED",
+			Author:    "octocat",
+			CreatedAt: now.Add(-48 * time.Hour),
+			MergedAt:  &merged1,
+		},
+		{
+			Number:    102,
+			Title:     "Fix database retry",
+			State:     "MERGED",
+			Author:    "mona",
+			CreatedAt: now.Add(-24 * time.Hour),
+			MergedAt:  &merged2,
+		},
+	}
+
+	tests := []struct {
+		name          string
+		repo          string
+		verbose       bool
+		noCache       bool
+		setupCache    bool
+		expectErr     bool
+		expectedCount int
+	}{
+		{
+			name:      "invalid repo flag returns error",
+			repo:      "invalidformat",
+			expectErr: true,
+		},
+		{
+			name:          "cache hit fallback with spinner enabled (non-verbose)",
+			repo:          "octo-org/cool-repo",
+			verbose:       false,
+			noCache:       false,
+			setupCache:    true,
+			expectErr:     false,
+			expectedCount: 2,
+		},
+		{
+			name:          "cache hit fallback with verbose mode enabled",
+			repo:          "octo-org/cool-repo",
+			verbose:       true,
+			noCache:       false,
+			setupCache:    true,
+			expectErr:     false,
+			expectedCount: 2,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tempHome := t.TempDir()
+			t.Setenv("HOME", tempHome)
+			t.Setenv("GH_TOKEN", "mock-test-token")
+
+			if tc.setupCache {
+				cm, err := cache.NewCacheManager()
+				if err != nil {
+					t.Fatalf("failed to create cache manager: %v", err)
+				}
+				if err := cm.Save(tc.repo, mockPRs); err != nil {
+					t.Fatalf("failed to save mock cache: %v", err)
+				}
+			}
+
+			opts := metrics.FilterOptions{
+				Repo:    tc.repo,
+				Verbose: tc.verbose,
+				NoCache: tc.noCache,
+				Format:  "text",
+				Past:    "30d",
+			}
+
+			prs, err := FetchAndProcessPRs(opts)
+			if tc.expectErr {
+				if err == nil {
+					t.Errorf("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(prs) != tc.expectedCount {
+				t.Errorf("expected %d PRs, got %d", tc.expectedCount, len(prs))
+			}
+		})
+	}
+}
+
+func TestRunMetricCommandWithOpts_Cached(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("GH_TOKEN", "mock-test-token")
+
+	repo := "testowner/testrepo"
+	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+	merged := now.Add(-24 * time.Hour)
+	ttm := 48.0 * 3600
+	mockPRs := []metrics.ProcessedPR{
+		{
+			Number:             1,
+			Title:              "Add feature A",
+			State:              "MERGED",
+			Author:             "alice",
+			CreatedAt:          now.Add(-72 * time.Hour),
+			MergedAt:           &merged,
+			TimeToMergeSeconds: &ttm,
+		},
+	}
+
+	cm, err := cache.NewCacheManager()
+	if err != nil {
+		t.Fatalf("failed to create cache manager: %v", err)
+	}
+	if err := cm.Save(repo, mockPRs); err != nil {
+		t.Fatalf("failed to save mock cache: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		domain  string
+		metric  string
+		verbose bool
+		format  string
+	}{
+		{
+			name:    "time merge metric text format with spinner",
+			domain:  "time",
+			metric:  "merge",
+			verbose: false,
+			format:  "text",
+		},
+		{
+			name:    "time merge metric json format with verbose",
+			domain:  "time",
+			metric:  "merge",
+			verbose: true,
+			format:  "json",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := metrics.FilterOptions{
+				Repo:    repo,
+				Verbose: tc.verbose,
+				Format:  tc.format,
+				Past:    "30d",
+			}
+			err := RunMetricCommandWithOpts(tc.domain, tc.metric, opts)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestOverviewAndExportCommands_Cached(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("GH_TOKEN", "mock-test-token")
+
+	repo := "testowner/scorecard-repo"
+	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+	merged := now.Add(-24 * time.Hour)
+	ttm := 24.0 * 3600
+	mockPRs := []metrics.ProcessedPR{
+		{
+			Number:             1,
+			Title:              "PR 1",
+			State:              "MERGED",
+			Author:             "alice",
+			CreatedAt:          now.Add(-48 * time.Hour),
+			MergedAt:           &merged,
+			TimeToMergeSeconds: &ttm,
+		},
+	}
+
+	cm, err := cache.NewCacheManager()
+	if err != nil {
+		t.Fatalf("failed to create cache manager: %v", err)
+	}
+	if err := cm.Save(repo, mockPRs); err != nil {
+		t.Fatalf("failed to save mock cache: %v", err)
+	}
+
+	t.Run("overview command text and json", func(t *testing.T) {
+		for _, format := range []string{"text", "json"} {
+			cmd := &cobra.Command{Use: "overview"}
+			attachTimeFlags(cmd)
+			attachFilterFlags(cmd)
+			attachOutputFlags(cmd)
+			cmd.PersistentFlags().StringVarP(&flagRepo, "repo", "R", "", "Target repository")
+			cmd.PersistentFlags().BoolVar(&flagNoCache, "no-cache", false, "Bypass local disk cache")
+			cmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "Print verbose progress")
+			cmd.PersistentFlags().IntVar(&flagPageSize, "page-size", 100, "GraphQL page size")
+
+			args := []string{"--repo", repo, "--format", format}
+			if err := cmd.ParseFlags(args); err != nil {
+				t.Fatalf("failed to parse flags: %v", err)
+			}
+			cmd.RunE = overviewCmd.RunE
+			if err := cmd.RunE(cmd, nil); err != nil {
+				t.Fatalf("overview RunE failed for format %s: %v", format, err)
+			}
+		}
+	})
+
+	t.Run("export command json and csv", func(t *testing.T) {
+		for _, format := range []string{"json", "csv"} {
+			cmd := &cobra.Command{Use: "export"}
+			attachTimeFlags(cmd)
+			attachFilterFlags(cmd)
+			attachOutputFlags(cmd)
+			cmd.PersistentFlags().StringVarP(&flagRepo, "repo", "R", "", "Target repository")
+			cmd.PersistentFlags().BoolVar(&flagNoCache, "no-cache", false, "Bypass local disk cache")
+			cmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "Print verbose progress")
+			cmd.PersistentFlags().IntVar(&flagPageSize, "page-size", 100, "GraphQL page size")
+
+			args := []string{"--repo", repo, "--format", format}
+			if err := cmd.ParseFlags(args); err != nil {
+				t.Fatalf("failed to parse flags: %v", err)
+			}
+			cmd.RunE = exportCmd.RunE
+			if err := cmd.RunE(cmd, nil); err != nil {
+				t.Fatalf("export RunE failed for format %s: %v", format, err)
+			}
+		}
+	})
+}
+
+func TestSpinnerProgressCallbackMessageFormat(t *testing.T) {
+	repoFullName := "owner/sample-repo"
+	sp := ui.NewSpinner(fmt.Sprintf("Fetching pull requests for %s...", repoFullName))
+
+	tests := []struct {
+		page     int
+		prCount  int
+		expected string
+	}{
+		{
+			page:     1,
+			prCount:  0,
+			expected: "Fetching pull requests for owner/sample-repo (page 1, 0 PRs)...",
+		},
+		{
+			page:     1,
+			prCount:  100,
+			expected: "Fetching pull requests for owner/sample-repo (page 1, 100 PRs)...",
+		},
+		{
+			page:     2,
+			prCount:  200,
+			expected: "Fetching pull requests for owner/sample-repo (page 2, 200 PRs)...",
+		},
+		{
+			page:     5,
+			prCount:  450,
+			expected: "Fetching pull requests for owner/sample-repo (page 5, 450 PRs)...",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("page_%d_count_%d", tc.page, tc.prCount), func(t *testing.T) {
+			msg := fmt.Sprintf("Fetching pull requests for %s (page %d, %d PRs)...", repoFullName, tc.page, tc.prCount)
+			sp.SetMessage(msg)
+			if msg != tc.expected {
+				t.Errorf("expected msg %q, got %q", tc.expected, msg)
+			}
+		})
+	}
 }
