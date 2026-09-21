@@ -31,14 +31,26 @@ To help us triage and resolve the issue quickly, please provide:
 - The version of `gh-pr-pro`, `gh` CLI, and operating system used.
 - Any known mitigations or workarounds.
 
+### Out of Scope
+
+The following scenarios are generally considered out of scope:
+- Vulnerabilities requiring physical or root/administrative access to the local machine.
+- Vulnerabilities or service disruptions in GitHub's REST/GraphQL APIs or upstream GitHub CLI (`gh`).
+- Theoretical attacks without a working proof-of-concept (PoC) demonstrating practical impact.
+- Vulnerabilities in third-party dependencies that have no reachable exploit path within `gh-pr-pro`.
+
 ---
 
 ## Disclosure and Response Timeline
 
-- **Initial Response**: We aim to acknowledge receipt of your vulnerability report within **48 hours** via GitHub.
-- **Assessment & Triage**: We will assess the severity, confirm reproducibility, and determine an appropriate remediation plan within **5 business days**.
-- **Fix & Advisory**: Once a patch is developed and verified, a new release will be published alongside a GitHub Security Advisory crediting the finder (if desired).
-- **Public Disclosure**: We coordinate public disclosure with the reporter through GitHub Advisories to ensure users have adequate time to upgrade before details are made public.
+We adhere to standard coordinated vulnerability disclosure (CVD) practices:
+
+- **Initial Response**: We aim to acknowledge receipt of your report within **2–3 business days** via GitHub.
+- **Assessment & Triage**: We will assess severity, confirm reproducibility, and establish an action plan within **5–7 business days**.
+- **Remediation**:
+  - **Critical / High Severity**: Target patch and release within **14–30 days**.
+  - **Medium / Low Severity**: Target patch within **30–90 days** (or the next minor release).
+- **Public Disclosure**: We coordinate public disclosure with the reporter via GitHub Security Advisories, observing a **90-day maximum disclosure window** unless mutually agreed otherwise.
 
 ---
 
