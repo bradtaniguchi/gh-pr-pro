@@ -4,22 +4,97 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag in SemVer format (e.g., v0.2.0)"
+        required: true
+        type: string
+      dry_run:
+        description: "Validate build and quality gates without creating release or publishing assets"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
   id-token: write
   attestations: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  release:
-    name: Build & Publish Extension Release
+  validate:
+    name: Maintainer Authorization & Quality Gates
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Strict defense-in-depth permission verification
+      - name: Verify Maintainer Authorization
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          echo "Verifying permissions for user '${ACTOR}'..."
+          PERM=$(gh api "repos/${{ github.repository }}/collaborators/${ACTOR}/permission" --jq .permission 2>/dev/null || echo "none")
+          echo "Actor '${ACTOR}' has repository permission level: '${PERM}'"
+          if [[ "${PERM}" != "admin" && "${PERM}" != "write" ]]; then
+            echo "::error::Unauthorized release trigger. User '${ACTOR}' does not have maintainer (admin/write) rights."
+            exit 1
+          fi
+
+      # Validate version tag syntax if dispatched manually
+      - name: Validate Tag Format
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          TAG="${{ inputs.tag }}"
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid SemVer tag '${TAG}'. Expected 'vMAJOR.MINOR.PATCH' (e.g., v0.2.0 or v1.0.0-rc.1)"
+            exit 1
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Verify Module Dependencies (go mod tidy)
+        run: make tidy-check
+
+      - name: Run Unit Tests with Race Detector
+        run: go test -race -count=1 ./...
+
+      - name: Audit Output Schema Contracts
+        run: make audit-schema
+
+      - name: Verify README CLI Documentation Sync
+        run: make audit-readme
+
+      - name: Verify Cross-Platform Compilation
+        run: make check-cross-compile
+
+  publish:
+    name: Build & Publish Extension Release
+    needs: [validate]
+    if: inputs.dry_run != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Precompile and publish release assets
         uses: cli/gh-extension-precompile@v2
         with:
           go_version_file: go.mod
+          release_tag: ${{ inputs.tag }}

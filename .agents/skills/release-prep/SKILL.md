@@ -13,21 +13,21 @@ Execute this skill whenever you are:
 - Preparing a new version release (major, minor, or patch)
 - Validating cross-compilation across supported target operating systems (`linux`, `darwin`, `windows`) and architectures (`amd64`, `arm64`)
 - Generating release notes or updating changelogs
-- Creating and pushing git tags that trigger GitHub Actions automated distribution ([`.github/workflows/release.yml`](file:///Users/brad/Projects/gh-pr-pro/.github/workflows/release.yml))
+- Triggering automated releases via `gh workflow run release.yml` or creating release git tags for GitHub Actions automated distribution ([`.github/workflows/release.yml`](file:///Users/brad/Projects/gh-pr-pro/.github/workflows/release.yml))
 
 ---
 
 ## Release Architecture
 
-`gh-pr-pro` distributes precompiled binaries through GitHub Releases using the official `cli/gh-extension-precompile` action triggered on tags matching `v*`:
+`gh-pr-pro` distributes precompiled binaries through GitHub Releases using the official `cli/gh-extension-precompile` action:
 
 ```mermaid
 graph TD
-    A["1. Local Release Prep<br/>(clean tree, verify_cross_compile, make check)"] --> B["2. Tag Release<br/>(git tag -a vX.Y.Z)"]
-    B --> C["3. Push Tag<br/>(git push origin vX.Y.Z)"]
-    C --> D[".github/workflows/release.yml"]
-    D --> E["cli/gh-extension-precompile@v2"]
-    E --> F["GitHub Release with Assets<br/>(Linux, macOS, Windows binaries)"]
+    A["1. Maintainer Release Dispatch<br/>(gh workflow run release.yml -f tag=vX.Y.Z)"] --> B{"2. Maintainer Auth & Quality Gates<br/>(make check & check-cross-compile)"}
+    B -- Authorized & Pass --> C["3. cli/gh-extension-precompile@v2"]
+    C --> D["4. GitHub Release with Assets<br/>(Linux, macOS, Windows binaries)"]
+    
+    E["Alternative: git tag -a vX.Y.Z && git push"] --> B
 ```
 
 ---
@@ -114,13 +114,35 @@ gh extension list | grep gh-pr-pro
 
 # Verify binary executes
 gh pr-pro --help
+
+# Remove local development symlink when done testing
+gh extension remove pr-pro
 ```
 
 ---
 
-### Step 6: Create and Push Git Tag
+### Step 6: Trigger Release
 
-Once all previous steps succeed:
+#### Option A: Automated Dispatch (Recommended for Maintainers)
+
+Maintainers can trigger the automated release pipeline via GitHub CLI or the GitHub web UI:
+
+```bash
+# Trigger automated release for target tag
+gh workflow run release.yml -f tag=vX.Y.Z
+
+# Optional: Dry-run mode (runs verification and compilation without creating a release)
+gh workflow run release.yml -f tag=vX.Y.Z -f dry_run=true
+```
+
+The workflow will:
+1. Validate that the invoking user has maintainer (`admin` or `write`) permissions via GitHub Collaborator API.
+2. Run all quality, schema, and cross-compilation gates in CI.
+3. Call `cli/gh-extension-precompile@v2` to compile binaries for Linux, macOS, and Windows, tag the release, and upload release assets.
+
+#### Option B: Manual Tag Push
+
+Alternatively, create and push an annotated git tag:
 
 ```bash
 # Create annotated tag

@@ -30,11 +30,23 @@ Use this checklist during every release cycle for `gh-pr-pro`.
 - [ ] Extension installs locally: `gh extension install .`
 - [ ] Root help executes: `gh pr-pro --help`
 - [ ] Sample command runs: `gh pr-pro time merge --past 7d -R cli/cli` (or `./gh-pr-pro cache list`)
+- [ ] Extension uninstalled when done: `gh extension remove pr-pro`
 
 ---
 
 ## 4. Tag & Distribution
+
+### Option A: Automated Dispatch (Recommended for Maintainers)
+- [ ] Trigger workflow dispatch:
+  ```bash
+  gh workflow run release.yml -f tag=vX.Y.Z
+  ```
+  *(Or optionally test first with `-f dry_run=true`)*
+- [ ] Confirm workflow runs on GitHub Actions and passes maintainer verification & quality gates.
+- [ ] Confirm precompiled binary archives attached to the GitHub Release on GitHub.
+
+### Option B: Manual Tag Push
 - [ ] Create annotated git tag: `git tag -a vX.Y.Z -m "Release vX.Y.Z"`
 - [ ] Push tag: `git push origin vX.Y.Z`
 - [ ] Monitor GitHub Actions workflow at `.github/workflows/release.yml`
-- [ ] Confirm precompiled binary archives attached to the GitHub Release on GitHub
+- [ ] Confirm precompiled binary archives attached to the GitHub Release on GitHub.

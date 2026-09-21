@@ -311,12 +311,15 @@ gh repo edit bradtaniguchi/gh-pr-pro --add-topic gh-extension
 ```
 
 ### 2. Pre-Release Verification Gate
-Before tagging a release, ensure all checks, schema contracts, and cross-platform builds succeed on `main`:
+Before releasing, ensure the local working tree is clean and up to date:
 ```bash
-# Ensure working tree is clean and up to date
+# Ensure working tree is clean and on main
 git checkout main && git pull origin main
+```
 
-# Run full CI quality checks (linting, vulnerability scan, tests with race detector)
+Optionally run the full verification gate locally prior to triggering the release:
+```bash
+# Run full CI quality checks (tidy check, linting, vulnerability scan, tests with race detector)
 make check
 
 # Verify output schemas (JSON/CSV/TSV/Markdown)
@@ -326,34 +329,65 @@ make audit-schema
 make check-cross-compile
 ```
 
-### 3. Tag and Publish Semantic Version
+### 3. Determine Semantic Version
 Releases adhere to [Semantic Versioning](https://semver.org/) (`vMAJOR.MINOR.PATCH`):
 - **PATCH** (`v0.1.1`): Bug fixes, internal refactors, documentation updates.
 - **MINOR** (`v0.2.0`): New metric commands, new flags, new export formats.
 - **MAJOR** (`v1.0.0`): Breaking CLI changes or schema alterations.
 
-Create and push an annotated git tag:
+Generate release notes from commits since the last tag:
 ```bash
-# Create annotated tag
-git tag -a v0.1.0 -m "Release v0.1.0"
-
-# Push tag to trigger release workflow
-git push origin v0.1.0
+./.agents/skills/release-prep/scripts/generate_release_notes.sh
 ```
 
-### 4. Automated Release Pipeline
-Pushing a `v*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which uses the official `cli/gh-extension-precompile@v2` action to:
-1. Compile multi-platform binaries (`linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`).
-2. Generate SHA256 checksums.
-3. Attach precompiled binary assets to the newly created GitHub Release.
+---
+
+### 4. Publish Release
+
+#### Method A: Automated Release Dispatch (Recommended for Maintainers)
+
+Maintainers can trigger the automated release workflow directly from the command line or GitHub web UI. The workflow runs on [`.github/workflows/release.yml`](.github/workflows/release.yml):
+
+1. **Maintainer Authorization**: The workflow queries the GitHub Collaborator API to enforce that the executing user has maintainer (`admin` or `write`) permissions on the repository. Unauthorized invocations fail immediately.
+2. **Automated Quality & Compilation Gates in CI**: Automatically runs `make tidy-check`, unit tests with race detection, schema contract validation (`make audit-schema`), README synchronization check (`make audit-readme`), and cross-platform compilation across all 5 OS/architecture targets.
+3. **Build & Publish Assets**: Invokes `cli/gh-extension-precompile@v2` to cross-compile binary releases, tag the release on GitHub, generate release notes, and upload multi-platform archive assets.
+
+**Triggering via GitHub CLI (`gh`)**:
+```bash
+# Dispatch automated release for v0.2.0
+gh workflow run release.yml -f tag=v0.2.0
+
+# Optional: Run in dry-run mode (runs all checks and compilation without publishing)
+gh workflow run release.yml -f tag=v0.2.0 -f dry_run=true
+```
+
+**Triggering via GitHub Web UI**:
+1. Navigate to the repository's **Actions** tab.
+2. Select the **Release** workflow from the left sidebar.
+3. Click **Run workflow**, enter the release tag (e.g. `v0.2.0`), and submit.
+
+#### Method B: Manual Git Tag & Push
+
+Alternatively, maintainers can create and push an annotated git tag manually:
+```bash
+# Create annotated tag
+git tag -a v0.2.0 -m "Release v0.2.0"
+
+# Push tag to trigger release workflow
+git push origin v0.2.0
+```
+
+---
 
 ### 5. Verify Installation
 Once the GitHub Actions workflow completes, test installing and running the published release:
 ```bash
-# Install or upgrade the extension
+# Install or upgrade the extension from remote
 gh extension install bradtaniguchi/gh-pr-pro
 
 # Verify binary execution
 gh pr-pro --help
-```
 
+# Verify extension is listed with its remote repository and published version tag
+gh extension list | grep gh-pr-pro
+```
