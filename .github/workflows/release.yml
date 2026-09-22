@@ -98,3 +98,12 @@ jobs:
         with:
           go_version_file: go.mod
           release_tag: ${{ inputs.tag }}
+
+      - name: Generate and publish categorized release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          ./.agents/skills/release-prep/scripts/generate_release_notes.sh --output release_notes.md
+          gh release edit "${TAG}" --notes-file release_notes.md
+
