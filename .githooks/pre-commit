@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Zero-dependency pre-commit hook for gh-pr-pro.
-# Runs code formatting checks, static analysis, a pinned vulnerability scan,
-# race-detected unit tests, README API synchronization audit, and schema regression verification.
+# Fast pre-commit hook for gh-pr-pro.
+# Runs module tidy check and static analysis / formatting (golangci-lint).
+# Heavy tests, vulnerability scans, and audits are handled in CI/CD.
 
 set -euo pipefail
 
-echo "==> Running pre-commit checks (make check, including govulncheck)..."
-if ! make check; then
+echo "==> Running fast pre-commit checks (make check-fast)..."
+if ! make check-fast; then
     echo ""
     echo "❌ Pre-commit checks failed! Please resolve the errors above before committing."
     echo "   (To bypass in an emergency, use 'git commit --no-verify')"

@@ -58,7 +58,7 @@ To develop and test `gh-pr-pro`, ensure you have the following installed:
    ```bash
    make init-hooks
    ```
-   This configures Git's native `core.hooksPath` to use `.githooks/pre-commit`, running `make check` (module tidy check, static analysis, pinned vulnerability scan, race-detected tests, README audit, and schema validation) before each commit.
+   This configures Git's native `core.hooksPath` to use `.githooks/pre-commit`, running `make check-fast` (module tidy check and `golangci-lint` static analysis & formatting) before each commit for rapid, sub-second developer feedback. Comprehensive test suites, race detection, vulnerability scans, and schema audits are handled in CI/CD and the full `make check` target.
 
 ---
 
@@ -91,7 +91,10 @@ make build
 # Install binary to $GOPATH/bin
 make install
 
-# Pre-commit verification (tidy + lint + vulncheck + test + audit-readme + audit-schema)
+# Fast pre-commit verification (tidy + lint)
+make check-fast
+
+# Full quality gate verification (tidy + lint + vulncheck + race tests + audit-readme + audit-schema)
 make check
 
 # Audit README synchronization against CLI API surface
@@ -295,7 +298,7 @@ Follow the [`add-metric`](file:///Users/brad/Projects/gh-pr-pro/.agents/skills/a
 
 1. Initialize git pre-commit hooks (if not done yet): `make init-hooks`.
 2. Create a feature branch: `git checkout -b feat/my-new-metric`.
-3. Ensure pre-commit checks pass: `make check`.
+3. Ensure quality checks pass: `make check`.
 4. Push to your fork and submit a Pull Request against `main` using the provided [pull request template](.github/pull_request_template.md).
 
 ---
