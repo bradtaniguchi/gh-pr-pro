@@ -129,13 +129,11 @@ gh pr-pro
 │   └── reverts       # Post-merge revert rate and time-to-revert
 ├── code
 │   ├── size          # Lines added/deleted, files changed, sizing
-│   ├── commits       # Commits per PR, force pushes, rebase ratios
-│   └── hotspots      # Files and paths modified most frequently
+│   └── commits       # Commit count per PR and commit distribution
 ├── team
 │   ├── throughput    # PR velocity (opened vs merged vs closed)
 │   ├── reviews       # Review distribution and workload balance
-│   ├── unreviewed    # Self-merged / bypass review percentage
-│   └── abandonment   # Unmerged closed PR drop-off stats
+│   └── unreviewed    # Self-merged / bypass review percentage
 ├── overview          # Composite executive scorecard
 ├── export            # Raw data streaming (JSON/CSV)
 └── cache             # Manage local persistent disk cache
@@ -156,15 +154,15 @@ gh pr-pro time merge --past 90d --group-by month
 ```
 
 ```text
-⏱️  MERGE TIME (Cycle Time) — past 90d (184 merged PRs)
+📊 TIME MERGE Analytics
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Period     Count   p50 (Median)   p75       p90       Mean
+Group            Count    p50 (Median) p75          p90          Mean      
 ─────────────────────────────────────────────────────────────
-2025-06    62      14.2h          26.0h     48.5h     21.3h
-2025-07    58      11.5h          19.8h     38.2h     17.1h
-2025-08    64      16.0h          31.4h     54.0h     24.6h
+2025-06          62       14.2h        26.0h        48.5h        21.3h     
+2025-07          58       11.5h        19.8h        38.2h        17.1h     
+2025-08          64       16.0h        31.4h        54.0h        24.6h     
 ─────────────────────────────────────────────────────────────
-Total      184     13.8h          25.1h     46.4h     21.0h
+Summary: 184 PRs analyzed | p50: 13.8h | p75: 25.1h | p90: 46.4h | Mean: 21.0h
 ```
 
 #### `time review`
@@ -175,13 +173,15 @@ gh pr-pro time review --past 30d --group-by reviewer
 ```
 
 ```text
-👥 REVIEW TURNAROUND — past 30d (128 PRs reviewed)
+📊 TIME REVIEW Analytics
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Reviewer    Reviews   Avg TTFR   p50 Resp   p90 Resp   Approvals / Changes
+Group            Count    p50 (Median) p75          p90          Mean      
 ─────────────────────────────────────────────────────────────
-@alice      42        1.8h       1.4h       5.2h       36 / 6
-@bob        31        3.2h       2.8h       11.0h      24 / 7
-@carol      19        7.5h       6.1h       24.0h      17 / 2
+@alice           42       1.4h         2.5h         5.2h         1.8h      
+@bob             31       2.8h         5.0h         11.0h        3.2h      
+@carol           19       6.1h         12.0h        24.0h        7.5h      
+─────────────────────────────────────────────────────────────
+Summary: 92 PRs analyzed | p50: 2.2h | p75: 4.8h | p90: 12.0h | Mean: 3.5h
 ```
 
 #### `time draft`
@@ -217,13 +217,19 @@ gh pr-pro quality ci --past 60d --group-by week
 ```
 
 ```text
-🚦 CI/CD HEALTH & STABILITY — past 60d
+📊 QUALITY CI Analytics
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Week        PRs Tested   Failed Checks %   Avg Retries   Top Failing Suite
+Group            Count    p50 (Median) p75          p90          Mean      
 ─────────────────────────────────────────────────────────────
-2025-W32    45           22.2% (10)        1.4           e2e-tests (6)
-2025-W33    51           15.7% (8)         1.1           lint-and-typecheck (4)
-2025-W34    48           27.1% (13)        1.8           integration-tests (9)
+2025-W32         45       22.2%        22.2%        22.2%        22.2%     
+2025-W33         51       15.7%        15.7%        15.7%        15.7%     
+2025-W34         48       27.1%        27.1%        27.1%        27.1%     
+─────────────────────────────────────────────────────────────
+Summary: 144 PRs analyzed | p50: 21.5% | p75: 21.5% | p90: 21.5% | Mean: 21.5%
+
+Top Failing Check Suites:
+  • e2e-tests: 6 failures
+  • lint-and-typecheck: 4 failures
 ```
 
 #### `quality rework`
@@ -259,17 +265,10 @@ gh pr-pro code size --past 30d --group-by month
 ```
 
 #### `code commits`
-Measures commit volume per PR, force pushes, and rebase/squash ratios.
+Measures commit volume per PR and evaluates pull request atomicity.
 
 ```bash
 gh pr-pro code commits --past 90d
-```
-
-#### `code hotspots`
-Identifies files and directories with the highest PR modification frequency.
-
-```bash
-gh pr-pro code hotspots --past 6m --top 10
 ```
 
 ---
@@ -297,12 +296,6 @@ Identifies PRs merged without external reviews or bypassing review policies.
 gh pr-pro team unreviewed --past 6m
 ```
 
-#### `team abandonment`
-Analyzes PRs closed without merging and where in the lifecycle they stalled.
-
-```bash
-gh pr-pro team abandonment --past 1y
-```
 
 ---
 
@@ -356,23 +349,35 @@ When passing `--json` (e.g., `gh pr-pro time merge --past 30d --group-by week --
   "metric": "merge",
   "time_window": {
     "since": "2025-08-03T00:00:00Z",
-    "until": "2025-09-02T00:00:00Z"
+    "until": "2025-09-02T00:00:00Z",
+    "past": "30d"
   },
   "summary": {
-    "total_prs": 184,
-    "p50_seconds": 49680,
-    "p75_seconds": 90360,
-    "p90_seconds": 167040,
-    "mean_seconds": 75600
+    "group_key": "Total",
+    "count": 184,
+    "p50": 49680,
+    "p75": 90360,
+    "p90": 167040,
+    "p95": 216000,
+    "p99": 288000,
+    "mean": 75600,
+    "min": 3600,
+    "max": 324000,
+    "unit": "seconds"
   },
   "groups": [
     {
       "group_key": "2025-W32",
       "count": 45,
-      "p50_seconds": 46800,
-      "p75_seconds": 82800,
-      "p90_seconds": 154800,
-      "mean_seconds": 71200
+      "p50": 46800,
+      "p75": 82800,
+      "p90": 154800,
+      "p95": 198000,
+      "p99": 252000,
+      "mean": 71200,
+      "min": 3600,
+      "max": 288000,
+      "unit": "seconds"
     }
   ]
 }
@@ -382,10 +387,10 @@ When passing `--json` (e.g., `gh pr-pro time merge --past 30d --group-by week --
 When passing `--csv` (e.g., `gh pr-pro time merge --past 30d --group-by week --csv`):
 
 ```csv
-group_key,count,p50_hours,p75_hours,p90_hours,mean_hours
-2025-W32,45,13.00,23.00,43.00,19.78
-2025-W33,51,11.50,19.80,38.20,17.10
-2025-W34,48,16.00,31.40,54.00,24.60
+group_key,count,p50,p75,p90,p95,p99,mean,min,max,unit
+2025-W32,45,13.00,23.00,43.00,55.00,70.00,19.78,1.00,80.00,seconds
+2025-W33,51,11.50,19.80,38.20,48.00,62.00,17.10,0.50,75.00,seconds
+2025-W34,48,16.00,31.40,54.00,68.00,85.00,24.60,2.00,90.00,seconds
 ```
 
 ---
