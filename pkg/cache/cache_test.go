@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -273,8 +274,10 @@ func TestAtomicCacheSave(t *testing.T) {
 	}
 
 	// Check file permissions (on Unix systems)
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Errorf("expected file mode 0600, got %o", perm)
+	if runtime.GOOS != "windows" {
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Errorf("expected file mode 0600, got %o", perm)
+		}
 	}
 
 	// Verify no temporary files remain in directory
