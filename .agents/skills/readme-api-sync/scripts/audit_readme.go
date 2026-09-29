@@ -119,6 +119,12 @@ func main() {
 	commands := collectCommands(cmd.RootCmd, "")
 	sort.Strings(commands)
 
+	validCommands := make(map[string]bool)
+	for _, c := range commands {
+		trimmed := strings.TrimPrefix(c, "gh-pr-pro ")
+		validCommands[trimmed] = true
+	}
+
 	var missingCommands []string
 	for _, c := range commands {
 		// Each subcommand (e.g., "time merge") should be documented in README.
@@ -126,6 +132,57 @@ func main() {
 		subcommandLeaf := parts[len(parts)-1]
 		if !strings.Contains(readmeText, subcommandLeaf) {
 			missingCommands = append(missingCommands, c)
+		}
+	}
+
+	// Bidirectional Check: Check for unknown/phantom commands documented in README.md headers (#### `domain subcommand`)
+	var phantomHeaderCommands []string
+	lines := strings.Split(readmeText, "\n")
+	for _, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmedLine, "#### `") && strings.HasSuffix(trimmedLine, "`") {
+			cmdDoc := strings.Trim(trimmedLine[5:len(trimmedLine)-1], "`")
+			cmdDoc = strings.TrimSpace(cmdDoc)
+			if !validCommands[cmdDoc] {
+				phantomHeaderCommands = append(phantomHeaderCommands, cmdDoc)
+			}
+		}
+	}
+
+	// Bidirectional Check: Check ASCII tree in Command Hierarchy & Reference
+	var phantomTreeCommands []string
+	inHierarchy := false
+	currentDomain := ""
+	for _, line := range lines {
+		if strings.HasPrefix(line, "## Command Hierarchy & Reference") {
+			inHierarchy = true
+			continue
+		}
+		if inHierarchy && strings.HasPrefix(line, "---") {
+			inHierarchy = false
+			break
+		}
+		if inHierarchy {
+			trimmed := strings.TrimSpace(line)
+			if (strings.HasPrefix(trimmed, "├── ") || strings.HasPrefix(trimmed, "└── ")) && !strings.Contains(trimmed, "│") {
+				parts := strings.Fields(trimmed[len("├── "):])
+				if len(parts) > 0 {
+					currentDomain = parts[0]
+				}
+			} else if strings.Contains(trimmed, "├── ") || strings.Contains(trimmed, "└── ") {
+				idx := strings.Index(trimmed, "── ")
+				if idx != -1 {
+					subPart := strings.TrimSpace(trimmed[idx+len("── "):])
+					subFields := strings.Fields(subPart)
+					if len(subFields) > 0 {
+						subName := subFields[0]
+						fullCmd := currentDomain + " " + subName
+						if !validCommands[fullCmd] {
+							phantomTreeCommands = append(phantomTreeCommands, fullCmd)
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -188,6 +245,26 @@ func main() {
 		hasError = true
 		fmt.Printf("✗ %d CLI subcommands are missing from README.md:\n", len(missingCommands))
 		for _, c := range missingCommands {
+			fmt.Printf("    - %s\n", c)
+		}
+	}
+
+	if len(phantomHeaderCommands) == 0 {
+		fmt.Println("✓ No undocumented/phantom command headers found in README.md")
+	} else {
+		hasError = true
+		fmt.Printf("✗ %d documented command headers do not exist in CLI:\n", len(phantomHeaderCommands))
+		for _, c := range phantomHeaderCommands {
+			fmt.Printf("    - %s\n", c)
+		}
+	}
+
+	if len(phantomTreeCommands) == 0 {
+		fmt.Println("✓ All command hierarchy tree subcommands exist in CLI")
+	} else {
+		hasError = true
+		fmt.Printf("✗ %d command hierarchy tree subcommands do not exist in CLI:\n", len(phantomTreeCommands))
+		for _, c := range phantomTreeCommands {
 			fmt.Printf("    - %s\n", c)
 		}
 	}
