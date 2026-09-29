@@ -84,13 +84,15 @@ func (cm *CacheManager) Load(repo string) ([]metrics.ProcessedPR, time.Time, err
 }
 
 // Save writes and serializes the provided slice of processed PRs to disk for the given repository.
-// It automatically creates any missing parent directories and records the current timestamp as LastFetched.
+// It uses an atomic write pattern (staging to a temporary file in the cache directory, flushing buffers,
+// and atomically renaming over the destination path) to prevent cache corruption from concurrent processes
+// or unexpected interruptions.
 func (cm *CacheManager) Save(repo string, prs []metrics.ProcessedPR) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
 	if err := os.MkdirAll(cm.baseDir, 0o755); err != nil {
-		return err
+		return fmt.Errorf("failed to create cache directory: %w", err)
 	}
 
 	filePath := cm.getFilePath(repo)
@@ -102,10 +104,60 @@ func (cm *CacheManager) Save(repo string, prs []metrics.ProcessedPR) error {
 
 	data, err := json.MarshalIndent(cached, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal cache data: %w", err)
 	}
 
-	return os.WriteFile(filePath, data, 0o600)
+	sanitized := strings.ReplaceAll(repo, "/", "_")
+	tmpFile, err := os.CreateTemp(cm.baseDir, fmt.Sprintf(".tmp-%s-*.json", sanitized))
+	if err != nil {
+		return fmt.Errorf("failed to create temporary cache file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	keepTmp := false
+	defer func() {
+		if !keepTmp {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if _, err := tmpFile.Write(data); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("failed to write temporary cache file: %w", err)
+	}
+
+	if err := tmpFile.Sync(); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("failed to sync temporary cache file: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary cache file: %w", err)
+	}
+
+	if err := os.Chmod(tmpPath, 0o600); err != nil {
+		return fmt.Errorf("failed to set cache file permissions: %w", err)
+	}
+
+	if err := atomicRename(tmpPath, filePath); err != nil {
+		return fmt.Errorf("failed to commit cache file: %w", err)
+	}
+
+	keepTmp = true
+	return nil
+}
+
+// atomicRename renames oldPath to newPath, retrying briefly with exponential backoff on transient locking errors.
+func atomicRename(oldPath, newPath string) error {
+	var err error
+	for i := 0; i < 5; i++ {
+		err = os.Rename(oldPath, newPath)
+		if err == nil {
+			return nil
+		}
+		time.Sleep(time.Duration(10*(i+1)) * time.Millisecond)
+	}
+	return err
 }
 
 // GetBaseDir returns the base cache directory path.
@@ -137,7 +189,7 @@ func (cm *CacheManager) ListEntries() ([]CacheEntryInfo, error) {
 
 	var results []CacheEntryInfo
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
 		}
 
@@ -194,7 +246,7 @@ func (cm *CacheManager) Delete(repo string) (bool, error) {
 	return true, nil
 }
 
-// ClearAll removes all cached JSON entries from the cache directory and returns the number of deleted files.
+// ClearAll removes all cached JSON entries and temporary files from the cache directory and returns the number of deleted files.
 func (cm *CacheManager) ClearAll() (int, error) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -209,8 +261,12 @@ func (cm *CacheManager) ClearAll() (int, error) {
 
 	deletedCount := 0
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
-			fullPath := filepath.Join(cm.baseDir, entry.Name())
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasSuffix(name, ".json") || strings.HasPrefix(name, ".tmp-") {
+			fullPath := filepath.Join(cm.baseDir, name)
 			if err := os.Remove(fullPath); err == nil {
 				deletedCount++
 			}
