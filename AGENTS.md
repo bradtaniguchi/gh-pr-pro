@@ -6,12 +6,12 @@ This document defines critical architectural invariants, error policies, and age
 
 ## 1. Quality Gate & Verification
 
-Always verify changes using the canonical pre-commit quality gate:
+Always verify changes using the canonical quality gate before opening a PR:
 
 ```bash
 make check
 ```
-*(Runs module tidy check, `golangci-lint`, `govulncheck`, race-detected unit tests, README audit, and schema validation).*
+*(Runs module tidy check, `golangci-lint`, `govulncheck`, race-detected unit tests, README audit, and schema validation. The local pre-commit hook runs `make check-fast` for sub-second tidy and lint feedback).*
 
 ---
 

@@ -1,7 +1,7 @@
 BINARY_NAME ?= gh-pr-pro
 GOVULNCHECK_VERSION ?= v1.8.0
 
-.PHONY: all help build install test test-v cover cover-text vet fmt fmt-check lint tidy-check clean check doc audit-readme audit-schema check-cross-compile init-hooks vulncheck
+.PHONY: all help build install test test-v cover cover-text vet fmt fmt-check lint tidy-check clean check check-fast doc audit-readme audit-schema check-cross-compile init-hooks vulncheck
 
 ##@ Build & Execution
 
@@ -34,7 +34,9 @@ cover-text: ## Run tests and print coverage summary to terminal
 
 ##@ Quality & Pre-commit
 
-check: tidy-check lint vulncheck test audit-readme audit-schema ## Run full pre-commit check (tidy, lint, vulncheck, test, audits)
+check: tidy-check lint vulncheck test audit-readme audit-schema ## Run full quality gate (tidy, lint, vulncheck, race tests, audits)
+
+check-fast: tidy-check lint ## Run fast pre-commit check (tidy and lint; tests and vulncheck deferred to CI)
 
 init-hooks: ## Configure git to use project pre-commit hooks (.githooks)
 	git config core.hooksPath .githooks
