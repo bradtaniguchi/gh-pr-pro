@@ -103,12 +103,17 @@ Available on metric domain commands (`time`, `quality`, `code`, `team`), `overvi
 | `--detailed` | | `false` | Include detailed list of individual matching PR records alongside summary |
 
 ### 3. Cache Flags
-Cache commands (`cache list`, `cache clean`, `cache path`) only accept cache-specific flags and inherited **Global Flags** (`--repo`, `--no-cache`, `--verbose`, `--page-size`). They do **not** accept PR filtering, timing, or metric grouping flags.
+Cache commands (`cache list`, `cache status`, `cache migrate`, `cache clean`, `cache path`) only accept cache-specific flags and inherited **Global Flags** (`--repo`, `--no-cache`, `--verbose`, `--page-size`). They do **not** accept PR filtering, timing, or metric grouping flags.
 
 | Subcommand | Flag | Default | Description |
 |---|---|---|---|
 | `cache list` | `--json` | `false` | Output cached repository list in JSON format |
+| `cache status` | `--json` | `false` | Output cache health and migration status in JSON format |
+| `cache migrate` | `--all` | `false` | Migrate all outdated cached repository records |
+| `cache migrate` | `--dry-run` | `false` | Preview cache migration without modifying files on disk |
 | `cache clean` | `--all` | `false` | Clear all cached repository records |
+| `cache clean` | `--outdated` | `false` | Clear only outdated cache entries requiring refresh |
+| `cache clean` | `--corrupt` | `false` | Clear only corrupted cache files with invalid JSON |
 
 ---
 
@@ -138,7 +143,9 @@ gh pr-pro
 ├── export            # Raw data streaming (JSON/CSV)
 └── cache             # Manage local persistent disk cache
     ├── list          # List cached repositories and disk sizes
-    ├── clean         # Clear cache for a repo or all repos
+    ├── status        # Inspect cache health, schema versions, and migration guidance
+    ├── migrate       # Upgrade outdated cache files to current schema version
+    ├── clean         # Clear cache for a repo, outdated, corrupt, or all repos
     └── path          # Print local cache filesystem path
 ```
 
@@ -317,14 +324,29 @@ gh pr-pro export --since 2025-01-01 --until 2025-06-30 --json > pr_export_h1.jso
 ```
 
 #### `cache`
-Inspect and manage the local PR disk cache.
+Inspect, diagnose, migrate, and manage the local PR disk cache.
 
 ```bash
 # List all cached repositories and disk consumption
 gh pr-pro cache list
 
-# Output cached repositories in JSON format
-gh pr-pro cache list --json
+# Check cache health, schema versions, and migration guidance
+gh pr-pro cache status
+
+# Output cache status in JSON format
+gh pr-pro cache status --json
+
+# Migrate all outdated cache files to the current schema version
+gh pr-pro cache migrate --all
+
+# Preview cache migration for a specific repository
+gh pr-pro cache migrate cli/cli --dry-run
+
+# Clear only outdated cache entries
+gh pr-pro cache clean --outdated
+
+# Clear only corrupted cache files with invalid JSON
+gh pr-pro cache clean --corrupt
 
 # Clear cache for a specific repository
 gh pr-pro cache clean cli/cli

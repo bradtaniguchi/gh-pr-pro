@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"github.com/brad/gh-pr-pro/pkg/metrics"
 	"github.com/brad/gh-pr-pro/pkg/output"
 	"github.com/brad/gh-pr-pro/pkg/ui"
+	"github.com/brad/gh-pr-pro/pkg/version"
 	"github.com/spf13/cobra"
 )
 
@@ -56,8 +58,9 @@ var (
 // RootCmd represents the base Cobra command for the gh-pr-pro CLI extension.
 // It defines all global persistent flags for filtering, time ranges, and serialization formats.
 var RootCmd = &cobra.Command{
-	Use:   "gh-pr-pro [command]",
-	Short: "Advanced PR Analytics and Lifecycle Metrics for GitHub CLI",
+	Use:     "gh-pr-pro [command]",
+	Version: version.Version,
+	Short:   "Advanced PR Analytics and Lifecycle Metrics for GitHub CLI",
 	Long: `gh-pr-pro is a metric-first extension for GitHub CLI providing deep historical
 analytics, cycle times, review turnaround, CI stability, team velocity, and multi-format data export.
 
@@ -400,6 +403,18 @@ func FetchAndProcessPRs(opts metrics.FilterOptions) ([]metrics.ProcessedPR, erro
 				cachedPRs = loaded
 				lastFetched = ts
 				logCmdVerbose("Cache hit: loaded %d cached PRs (last synced: %s)", len(cachedPRs), ts.Format("2006-01-02 15:04:05"))
+			} else if err != nil {
+				if errors.Is(err, cache.ErrCacheRequiresRefresh) {
+					fmt.Fprintf(os.Stderr, "Notice: Local cache for %s was created with an older schema and requires re-sync. Refreshing from GitHub API...\n", repoFullName)
+					_, _ = mgr.Delete(repoFullName)
+				} else if errors.Is(err, cache.ErrCacheFutureVersion) {
+					fmt.Fprintf(os.Stderr, "Warning: Local cache for %s was created by a newer version of gh-pr-pro (%v). Bypassing cache to prevent corruption.\n", repoFullName, err)
+					cacheMgr = nil // Avoid overwriting newer cache file with older format
+				} else if errors.Is(err, cache.ErrCacheCorrupt) {
+					logCmdVerbose("Cache file corrupted for %s (%v); bypassing and will overwrite with fresh data.", repoFullName, err)
+				} else {
+					logCmdVerbose("Cache load error for %s: %v", repoFullName, err)
+				}
 			} else {
 				logCmdVerbose("Cache miss / no existing cache entry for %s", repoFullName)
 			}

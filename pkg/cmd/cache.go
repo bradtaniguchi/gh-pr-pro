@@ -11,8 +11,13 @@ import (
 )
 
 var (
-	flagCacheAll      bool
-	flagCacheListJSON bool
+	flagCacheAll           bool
+	flagCacheListJSON      bool
+	flagCacheStatusJSON    bool
+	flagCacheOutdated      bool
+	flagCacheCorrupt       bool
+	flagCacheMigrateAll    bool
+	flagCacheMigrateDryRun bool
 )
 
 // cacheCmd represents the parent command for inspecting and managing the local disk cache.
@@ -26,8 +31,17 @@ subsequent queries and prevent GitHub GraphQL API rate limit exhaustion.`,
 	Example: `  # List all cached repositories and disk space usage
   gh pr-pro cache list
 
-  # List cached entries in JSON format
-  gh pr-pro cache list --json
+  # Check cache health, semantic versions, and recommended actions
+  gh pr-pro cache status
+
+  # Migrate all outdated cache files to the current package version
+  gh pr-pro cache migrate --all
+
+  # Preview migration for a specific repository
+  gh pr-pro cache migrate cli/cli --dry-run
+
+  # Clear only outdated cache entries
+  gh pr-pro cache clean --outdated
 
   # Clear cached data for a specific repository
   gh pr-pro cache clean cli/cli
@@ -64,6 +78,7 @@ var cacheListCmd = &cobra.Command{
 			enc.SetIndent("", "  ")
 			return enc.Encode(map[string]interface{}{
 				"cache_directory": mgr.GetBaseDir(),
+				"current_version": cache.CurrentVersion,
 				"total_entries":   len(entries),
 				"entries":         entries,
 			})
@@ -75,8 +90,8 @@ var cacheListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-		fmt.Fprintln(w, "REPOSITORY\tPRS\tDISK SIZE\tLAST SYNCED\tFILE PATH")
-		fmt.Fprintln(w, "──────────\t───\t─────────\t───────────\t─────────")
+		fmt.Fprintln(w, "REPOSITORY\tVERSION\tSTATUS\tPRS\tDISK SIZE\tLAST SYNCED\tFILE PATH")
+		fmt.Fprintln(w, "──────────\t───────\t──────\t───\t─────────\t───────────\t─────────")
 
 		var totalSize int64
 		var totalPRs int
@@ -88,7 +103,7 @@ var cacheListCmd = &cobra.Command{
 			if e.LastFetched.IsZero() {
 				timeStr = "unknown"
 			}
-			fmt.Fprintf(w, "%s\t%d\t%s\t%s\t%s\n", e.Repo, e.PRCount, sizeStr, timeStr, e.FilePath)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\t%s\n", e.Repo, e.Version, e.Status, e.PRCount, sizeStr, timeStr, e.FilePath)
 		}
 		_ = w.Flush()
 
@@ -101,6 +116,168 @@ var cacheListCmd = &cobra.Command{
 	},
 }
 
+var cacheStatusCmd = &cobra.Command{
+	Use:     "status",
+	Aliases: []string{"check", "doctor"},
+	Short:   "Check cache health, schema versions, and migration status",
+	Example: `  # Check cache health and migration status
+  gh pr-pro cache status
+
+  # Output cache status in JSON format
+  gh pr-pro cache status --json`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		mgr, err := cache.NewCacheManager()
+		if err != nil {
+			return fmt.Errorf("failed to access cache manager: %w", err)
+		}
+
+		entries, err := mgr.ListEntries()
+		if err != nil {
+			return fmt.Errorf("failed to check cache status: %w", err)
+		}
+
+		type StatusItem struct {
+			Repo      string            `json:"repo"`
+			Version   string            `json:"version"`
+			Status    cache.CacheStatus `json:"status"`
+			PRCount   int               `json:"pr_count"`
+			SizeBytes int64             `json:"size_bytes"`
+			Action    string            `json:"action"`
+		}
+
+		var items []StatusItem
+		var currentCount, outdatedCount, futureCount, corruptCount int
+
+		for _, e := range entries {
+			action := "Up to date"
+			switch e.Status {
+			case cache.StatusCurrent:
+				currentCount++
+			case cache.StatusOutdated:
+				outdatedCount++
+				if e.IsMigratable {
+					action = fmt.Sprintf("Run 'gh pr-pro cache migrate %s'", e.Repo)
+				} else {
+					action = fmt.Sprintf("Run 'gh pr-pro cache clean %s' to re-sync", e.Repo)
+				}
+			case cache.StatusFuture:
+				futureCount++
+				action = "Upgrade gh-pr-pro extension"
+			case cache.StatusCorrupt:
+				corruptCount++
+				action = "Run 'gh pr-pro cache clean --corrupt'"
+			}
+
+			items = append(items, StatusItem{
+				Repo:      e.Repo,
+				Version:   e.Version,
+				Status:    e.Status,
+				PRCount:   e.PRCount,
+				SizeBytes: e.SizeBytes,
+				Action:    action,
+			})
+		}
+
+		if flagCacheStatusJSON {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(map[string]interface{}{
+				"cache_directory":  mgr.GetBaseDir(),
+				"target_version":   cache.CurrentVersion,
+				"total_entries":    len(entries),
+				"current_entries":  currentCount,
+				"outdated_entries": outdatedCount,
+				"future_entries":   futureCount,
+				"corrupt_entries":  corruptCount,
+				"items":            items,
+			})
+		}
+
+		if len(entries) == 0 {
+			fmt.Printf("Cache is empty (%s). All future fetches will create version %s caches.\n", mgr.GetBaseDir(), cache.CurrentVersion)
+			return nil
+		}
+
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+		fmt.Fprintln(w, "REPOSITORY\tVERSION\tSTATUS\tPRS\tDISK SIZE\tACTION")
+		fmt.Fprintln(w, "──────────\t───────\t──────\t───\t─────────\t──────")
+
+		for _, item := range items {
+			sizeStr := formatByteSize(item.SizeBytes)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n", item.Repo, item.Version, item.Status, item.PRCount, sizeStr, item.Action)
+		}
+		_ = w.Flush()
+
+		fmt.Println()
+		fmt.Printf("Health: %d total (%d current, %d outdated, %d future, %d corrupt) | Target Package Version: %s\n",
+			len(entries), currentCount, outdatedCount, futureCount, corruptCount, cache.CurrentVersion)
+
+		return nil
+	},
+}
+
+var cacheMigrateCmd = &cobra.Command{
+	Use:     "migrate [owner/repo]",
+	Aliases: []string{"upgrade"},
+	Short:   "Migrate outdated cache files to the current schema version",
+	Example: `  # Migrate cache for a specific repository
+  gh pr-pro cache migrate cli/cli
+
+  # Migrate all outdated cached repositories
+  gh pr-pro cache migrate --all
+
+  # Preview migration without writing to disk
+  gh pr-pro cache migrate --all --dry-run`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		mgr, err := cache.NewCacheManager()
+		if err != nil {
+			return fmt.Errorf("failed to access cache manager: %w", err)
+		}
+
+		if flagCacheMigrateAll {
+			count, err := mgr.MigrateAll(flagCacheMigrateDryRun)
+			if err != nil {
+				return fmt.Errorf("migration failed: %w", err)
+			}
+			if flagCacheMigrateDryRun {
+				fmt.Printf("ℹ️  [dry-run] Found %d outdated cache file(s) eligible for migration to version %s\n", count, cache.CurrentVersion)
+			} else {
+				fmt.Printf("✅ Successfully migrated %d cache file(s) to version %s\n", count, cache.CurrentVersion)
+			}
+			return nil
+		}
+
+		targetRepo := ""
+		if len(args) > 0 {
+			targetRepo = args[0]
+		} else if flagRepo != "" {
+			targetRepo = flagRepo
+		}
+
+		if targetRepo == "" {
+			return fmt.Errorf("specify a repository (e.g. 'gh pr-pro cache migrate owner/repo') or use '--all' to migrate everything")
+		}
+
+		fromVer, toVer, err := mgr.Migrate(targetRepo, flagCacheMigrateDryRun)
+		if err != nil {
+			return fmt.Errorf("failed to migrate cache for %s: %w", targetRepo, err)
+		}
+
+		if fromVer == toVer {
+			fmt.Printf("ℹ️  Cache for %s is already up to date (version %s)\n", targetRepo, toVer)
+			return nil
+		}
+
+		if flagCacheMigrateDryRun {
+			fmt.Printf("ℹ️  [dry-run] Cache for %s would be migrated from version %s to %s\n", targetRepo, fromVer, toVer)
+		} else {
+			fmt.Printf("✅ Successfully migrated cache for %s from version %s to %s\n", targetRepo, fromVer, toVer)
+		}
+
+		return nil
+	},
+}
+
 var cacheCleanCmd = &cobra.Command{
 	Use:     "clean [owner/repo]",
 	Aliases: []string{"clear", "delete", "rm"},
@@ -108,12 +285,36 @@ var cacheCleanCmd = &cobra.Command{
 	Example: `  # Delete cache for a specific repository
   gh pr-pro cache clean cli/cli
 
+  # Delete only outdated cache entries
+  gh pr-pro cache clean --outdated
+
+  # Delete only corrupted cache entries
+  gh pr-pro cache clean --corrupt
+
   # Delete all cached repositories
   gh pr-pro cache clean --all`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		mgr, err := cache.NewCacheManager()
 		if err != nil {
 			return fmt.Errorf("failed to access cache manager: %w", err)
+		}
+
+		if flagCacheOutdated {
+			deleted, err := mgr.ClearOutdated()
+			if err != nil {
+				return fmt.Errorf("failed to clear outdated cache entries: %w", err)
+			}
+			fmt.Printf("✅ Successfully cleared %d outdated cache file(s) from %s\n", deleted, mgr.GetBaseDir())
+			return nil
+		}
+
+		if flagCacheCorrupt {
+			deleted, err := mgr.ClearCorrupt()
+			if err != nil {
+				return fmt.Errorf("failed to clear corrupted cache entries: %w", err)
+			}
+			fmt.Printf("✅ Successfully cleared %d corrupted cache file(s) from %s\n", deleted, mgr.GetBaseDir())
+			return nil
 		}
 
 		if flagCacheAll {
@@ -133,7 +334,7 @@ var cacheCleanCmd = &cobra.Command{
 		}
 
 		if targetRepo == "" {
-			return fmt.Errorf("specify a repository (e.g. 'gh pr-pro cache clean owner/repo') or use '--all' to clear everything")
+			return fmt.Errorf("specify a repository (e.g. 'gh pr-pro cache clean owner/repo'), use '--outdated', '--corrupt', or use '--all' to clear everything")
 		}
 
 		deleted, err := mgr.Delete(targetRepo)
@@ -181,9 +382,16 @@ func formatByteSize(bytes int64) string {
 
 func init() {
 	cacheListCmd.Flags().BoolVar(&flagCacheListJSON, "json", false, "Output cached entries in JSON format")
+	cacheStatusCmd.Flags().BoolVar(&flagCacheStatusJSON, "json", false, "Output cache status in JSON format")
+	cacheMigrateCmd.Flags().BoolVar(&flagCacheMigrateAll, "all", false, "Migrate all outdated cached repository records")
+	cacheMigrateCmd.Flags().BoolVar(&flagCacheMigrateDryRun, "dry-run", false, "Preview cache migration without modifying files on disk")
 	cacheCleanCmd.Flags().BoolVar(&flagCacheAll, "all", false, "Clear all cached repository records")
+	cacheCleanCmd.Flags().BoolVar(&flagCacheOutdated, "outdated", false, "Clear only outdated cache entries requiring refresh")
+	cacheCleanCmd.Flags().BoolVar(&flagCacheCorrupt, "corrupt", false, "Clear only corrupted cache files with invalid JSON")
 
 	cacheCmd.AddCommand(cacheListCmd)
+	cacheCmd.AddCommand(cacheStatusCmd)
+	cacheCmd.AddCommand(cacheMigrateCmd)
 	cacheCmd.AddCommand(cacheCleanCmd)
 	cacheCmd.AddCommand(cachePathCmd)
 }
