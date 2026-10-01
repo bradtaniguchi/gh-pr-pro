@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -400,5 +402,223 @@ func TestListEntriesIgnoresTempAndHiddenFiles(t *testing.T) {
 	}
 	if cleared < 2 {
 		t.Errorf("expected at least 2 files cleared (valid + temp), got %d", cleared)
+	}
+}
+
+func TestCacheVersioningAndMigration(t *testing.T) {
+	tempDir := t.TempDir()
+	cm := NewCacheManagerWithDir(tempDir)
+
+	// 1. Write an unversioned legacy (v0.0.0) cache file
+	legacyJSON := `{
+  "repo": "owner/legacy",
+  "last_fetched": "2025-01-01T00:00:00Z",
+  "prs": [
+    {
+      "number": 1,
+      "title": "Legacy PR",
+      "state": "MERGED",
+      "created_at": "2025-01-01T00:00:00Z"
+    }
+  ]
+}`
+	legacyPath := cm.getFilePath("owner/legacy")
+	if err := os.WriteFile(legacyPath, []byte(legacyJSON), 0o600); err != nil {
+		t.Fatalf("failed writing legacy cache: %v", err)
+	}
+
+	// 2. Inspect entries before load - should be detected as outdated and migratable
+	entries, err := cm.ListEntries()
+	if err != nil {
+		t.Fatalf("failed to list entries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Version != LegacyVersion || entries[0].Status != StatusOutdated || !entries[0].IsMigratable {
+		t.Errorf("expected legacy outdated migratable, got %+v", entries[0])
+	}
+
+	// 3. Test explicit dry-run migration
+	fromVer, toVer, err := cm.Migrate("owner/legacy", true)
+	if err != nil {
+		t.Fatalf("unexpected error in dry-run migration: %v", err)
+	}
+	if fromVer != LegacyVersion || toVer != CurrentVersion {
+		t.Errorf("expected migration from %s to %s, got %s to %s", LegacyVersion, CurrentVersion, fromVer, toVer)
+	}
+
+	// Verify file is still legacy after dry-run
+	entries, _ = cm.ListEntries()
+	if entries[0].Version != LegacyVersion {
+		t.Errorf("expected file to remain %s after dry-run, got %s", LegacyVersion, entries[0].Version)
+	}
+
+	// 4. Test Load automatic migration
+	prs, lastFetched, err := cm.Load("owner/legacy")
+	if err != nil {
+		t.Fatalf("failed to load and auto-migrate legacy cache: %v", err)
+	}
+	if len(prs) != 1 || prs[0].Number != 1 {
+		t.Errorf("expected 1 loaded PR, got %+v", prs)
+	}
+	if lastFetched.IsZero() {
+		t.Errorf("expected non-zero lastFetched")
+	}
+
+	// 5. Verify the file on disk was upgraded to CurrentVersion
+	entries, _ = cm.ListEntries()
+	if len(entries) != 1 || entries[0].Version != CurrentVersion || entries[0].Status != StatusCurrent {
+		t.Errorf("expected entry to be upgraded to current, got %+v", entries[0])
+	}
+
+	// 6. Test already current file migration (no-op)
+	fromVer, toVer, err = cm.Migrate("owner/legacy", false)
+	if err != nil {
+		t.Fatalf("unexpected error migrating current file: %v", err)
+	}
+	if fromVer != CurrentVersion || toVer != CurrentVersion {
+		t.Errorf("expected no-op migration, got %s to %s", fromVer, toVer)
+	}
+}
+
+func TestCacheFutureVersionProtection(t *testing.T) {
+	tempDir := t.TempDir()
+	cm := NewCacheManagerWithDir(tempDir)
+
+	futureJSON := `{
+  "version": "v99.0.0",
+  "repo": "owner/future",
+  "last_fetched": "2026-01-01T00:00:00Z",
+  "prs": []
+}`
+	futurePath := cm.getFilePath("owner/future")
+	if err := os.WriteFile(futurePath, []byte(futureJSON), 0o600); err != nil {
+		t.Fatalf("failed writing future cache: %v", err)
+	}
+
+	entries, err := cm.ListEntries()
+	if err != nil {
+		t.Fatalf("failed to list entries: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Status != StatusFuture || entries[0].Version != "v99.0.0" {
+		t.Errorf("expected future entry, got %+v", entries[0])
+	}
+
+	// Loading should return ErrCacheFutureVersion
+	_, _, err = cm.Load("owner/future")
+	if err == nil || !errors.Is(err, ErrCacheFutureVersion) {
+		t.Errorf("expected ErrCacheFutureVersion, got: %v", err)
+	}
+
+	// Migrating should error
+	_, _, err = cm.Migrate("owner/future", false)
+	if err == nil || !errors.Is(err, ErrCacheFutureVersion) {
+		t.Errorf("expected ErrCacheFutureVersion on migrate, got: %v", err)
+	}
+}
+
+func TestCacheCorruptAndSelectiveClearing(t *testing.T) {
+	tempDir := t.TempDir()
+	cm := NewCacheManagerWithDir(tempDir)
+
+	// Valid entry
+	if err := cm.Save("owner/valid", []metrics.ProcessedPR{{Number: 1, Title: "Valid", State: "OPEN", CreatedAt: time.Now()}}); err != nil {
+		t.Fatalf("failed to save valid repo: %v", err)
+	}
+
+	// Outdated entry (v0)
+	legacyPath := cm.getFilePath("owner/outdated")
+	if err := os.WriteFile(legacyPath, []byte(`{"repo":"owner/outdated","prs":[]}`), 0o600); err != nil {
+		t.Fatalf("failed writing outdated cache: %v", err)
+	}
+
+	// Corrupt entry
+	corruptPath := filepath.Join(tempDir, "owner_corrupt.json")
+	if err := os.WriteFile(corruptPath, []byte(`{not valid json}`), 0o600); err != nil {
+		t.Fatalf("failed writing corrupt cache: %v", err)
+	}
+
+	entries, err := cm.ListEntries()
+	if err != nil {
+		t.Fatalf("failed listing: %v", err)
+	}
+	if len(entries) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(entries))
+	}
+
+	// Loading corrupt file should return ErrCacheCorrupt
+	_, _, err = cm.Load("owner/corrupt")
+	if err == nil || !errors.Is(err, ErrCacheCorrupt) {
+		t.Errorf("expected ErrCacheCorrupt, got: %v", err)
+	}
+
+	// Clear corrupt files only
+	clearedCorrupt, err := cm.ClearCorrupt()
+	if err != nil {
+		t.Fatalf("failed clearing corrupt: %v", err)
+	}
+	if clearedCorrupt != 1 {
+		t.Errorf("expected 1 corrupt file cleared, got %d", clearedCorrupt)
+	}
+
+	entries, _ = cm.ListEntries()
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries remaining, got %d", len(entries))
+	}
+
+	// Clear outdated files only
+	clearedOutdated, err := cm.ClearOutdated()
+	if err != nil {
+		t.Fatalf("failed clearing outdated: %v", err)
+	}
+	if clearedOutdated != 1 {
+		t.Errorf("expected 1 outdated file cleared, got %d", clearedOutdated)
+	}
+
+	entries, _ = cm.ListEntries()
+	if len(entries) != 1 || entries[0].Repo != "owner/valid" {
+		t.Errorf("expected only valid repo to remain, got %+v", entries)
+	}
+}
+
+func TestMigratorPipeline(t *testing.T) {
+	m := NewMigrator()
+
+	// Register dummy step v0.2.0 -> v0.3.0
+	m.Register("v0.2.0", func(raw []byte) ([]byte, error) {
+		var d map[string]interface{}
+		if err := json.Unmarshal(raw, &d); err != nil {
+			return nil, err
+		}
+		d["version"] = "v0.3.0"
+		d["migrated_to_v0_3"] = true
+		return json.Marshal(d)
+	})
+
+	input := []byte(`{"version":"v0.2.0","repo":"test/repo"}`)
+	out, err := m.Migrate(input, "v0.2.0", "v0.3.0")
+	if err != nil {
+		t.Fatalf("failed migrating v0.2.0 -> v0.3.0: %v", err)
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(out, &parsed); err != nil {
+		t.Fatalf("failed unmarshaling migrated json: %v", err)
+	}
+	if parsed["version"].(string) != "v0.3.0" || parsed["migrated_to_v0_3"] != true {
+		t.Errorf("expected migrated fields, got %+v", parsed)
+	}
+
+	// Downgrade error check
+	_, err = m.Migrate(out, "v0.3.0", "v0.2.0")
+	if err == nil {
+		t.Errorf("expected error attempting downgrade")
+	}
+
+	// Missing step check
+	_, err = m.Migrate(out, "v0.3.0", "v1.0.0")
+	if err == nil {
+		t.Errorf("expected error for missing migration step")
 	}
 }

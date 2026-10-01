@@ -20,7 +20,12 @@ make check
 ### Flag Scoping Rules
 - **Global Flags** (`--repo`/`-R`, `--no-cache`, `--verbose`/`-v`, `--page-size`) are registered as persistent flags on `RootCmd`.
 - **Metric/Filter/Output Flags** (`--past`, `--since`, `--group-by`, `--json`, etc.) must **only** attach to metric domains (`time`, `quality`, `code`, `team`), `overview`, and `export`.
-- **Cache Commands** (`cache list`, `cache clean`, `cache path`) must **never** accept metric or filtering flags (enforced in [`pkg/cmd/cache_test.go`](pkg/cmd/cache_test.go)).
+- **Cache Commands** (`cache list`, `cache status`, `cache migrate`, `cache clean`, `cache path`) must **never** accept metric or filtering flags (enforced in [`pkg/cmd/cache_test.go`](pkg/cmd/cache_test.go)).
+
+### Cache Semantic Versioning & Migrations
+- **Package Version Alignment**: All cache files must include `version` aligned with [`pkg/version.Version`](pkg/version/version.go) (e.g., `v0.2.0`). Legacy unversioned files are treated as `v0.0.0`.
+- **Migration Pipeline**: Modifying `metrics.ProcessedPR` or cache envelope structures requires assessing whether changes are additive/synthesizable (write step in `pkg/cache/migrator.go`) or require upstream API data (bump version and invalidate stale entries).
+- **Future Version Protection**: Never overwrite a cache file whose `version` is greater than `CurrentVersion` according to semantic version comparison (`version.Compare`).
 
 ### GraphQL & Network Resilience
 - **Delta Fetching:** Always calculate updates using delta timestamps (`last_fetched` in local cache).
