@@ -1,6 +1,7 @@
 # `gh-pr-pro`
 
 [![GitHub CLI Extension](https://img.shields.io/badge/gh-extension-blue.svg)](https://docs.github.com/en/github-cli/github-cli/creating-github-cli-extensions)
+[![Downloads](https://img.shields.io/github/downloads/bradtaniguchi/gh-pr-pro/total)](https://github.com/bradtaniguchi/gh-pr-pro/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Github CLI extension to provide extensive pull request metrics, with built in caching, csv/json/text output with extensive filtering.
