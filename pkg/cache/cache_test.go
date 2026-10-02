@@ -3,8 +3,11 @@ package cache
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -250,6 +253,155 @@ func TestCacheManagerManagement(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Errorf("expected 0 entries after clear, got %d", len(entries))
+	}
+}
+
+func TestAtomicCacheSave(t *testing.T) {
+	tempDir := t.TempDir()
+	cm := NewCacheManagerWithDir(tempDir)
+
+	prs := []metrics.ProcessedPR{
+		{Number: 1, Title: "Atomic PR", State: "OPEN", CreatedAt: time.Now()},
+	}
+
+	if err := cm.Save("owner/repo", prs); err != nil {
+		t.Fatalf("failed to save cache atomically: %v", err)
+	}
+
+	// Verify destination file exists and is valid
+	filePath := filepath.Join(tempDir, "owner_repo.json")
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("expected cache file to exist at %s: %v", filePath, err)
+	}
+
+	// Check file permissions (on Unix systems)
+	if runtime.GOOS != "windows" {
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Errorf("expected file mode 0600, got %o", perm)
+		}
+	}
+
+	// Verify no temporary files remain in directory
+	dirEntries, err := os.ReadDir(tempDir)
+	if err != nil {
+		t.Fatalf("failed to read tempDir: %v", err)
+	}
+	if len(dirEntries) != 1 {
+		t.Errorf("expected exactly 1 file in directory, got %d", len(dirEntries))
+	}
+	for _, entry := range dirEntries {
+		if entry.Name() != "owner_repo.json" {
+			t.Errorf("unexpected residual file in cache dir: %s", entry.Name())
+		}
+	}
+}
+
+func TestConcurrentCacheAccess(t *testing.T) {
+	tempDir := t.TempDir()
+	cm := NewCacheManagerWithDir(tempDir)
+
+	repo := "concurrent/test-repo"
+	numWriters := 10
+	numReaders := 20
+	iterations := 25
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, numWriters*iterations+numReaders*iterations)
+
+	// Launch concurrent writers
+	for w := 0; w < numWriters; w++ {
+		wg.Add(1)
+		go func(writerID int) {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				prs := make([]metrics.ProcessedPR, 50)
+				for p := 0; p < 50; p++ {
+					prs[p] = metrics.ProcessedPR{
+						Number:    p + 1,
+						Title:     fmt.Sprintf("PR from writer %d iter %d", writerID, i),
+						State:     "OPEN",
+						CreatedAt: time.Now(),
+					}
+				}
+				if err := cm.Save(repo, prs); err != nil {
+					errCh <- fmt.Errorf("writer %d iter %d failed: %w", writerID, i, err)
+					return
+				}
+			}
+		}(w)
+	}
+
+	// Launch concurrent readers
+	for r := 0; r < numReaders; r++ {
+		wg.Add(1)
+		go func(readerID int) {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				loaded, _, err := cm.Load(repo)
+				if err != nil {
+					errCh <- fmt.Errorf("reader %d iter %d failed to load: %w", readerID, i, err)
+					return
+				}
+				// If loaded, ensure it is not a partial/corrupted slice
+				if loaded != nil && len(loaded) != 50 {
+					errCh <- fmt.Errorf("reader %d iter %d read partial data: len=%d", readerID, i, len(loaded))
+					return
+				}
+			}
+		}(r)
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		t.Errorf("concurrent cache access error: %v", err)
+	}
+}
+
+func TestListEntriesIgnoresTempAndHiddenFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	cm := NewCacheManagerWithDir(tempDir)
+
+	// Create valid cache entry
+	prs := []metrics.ProcessedPR{
+		{Number: 1, Title: "PR 1", State: "OPEN", CreatedAt: time.Now()},
+	}
+	if err := cm.Save("owner/valid-repo", prs); err != nil {
+		t.Fatalf("failed to save valid repo: %v", err)
+	}
+
+	// Create dummy hidden/temporary files
+	hiddenFile := filepath.Join(tempDir, ".hidden.json")
+	if err := os.WriteFile(hiddenFile, []byte(`{"invalid": true}`), 0o600); err != nil {
+		t.Fatalf("failed to write hidden file: %v", err)
+	}
+
+	tmpFile := filepath.Join(tempDir, ".tmp-owner_repo-12345.json")
+	if err := os.WriteFile(tmpFile, []byte(`{"partial": true}`), 0o600); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	entries, err := cm.ListEntries()
+	if err != nil {
+		t.Fatalf("failed to list entries: %v", err)
+	}
+
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 valid entry, got %d", len(entries))
+	}
+	if entries[0].Repo != "owner/valid-repo" {
+		t.Errorf("expected repo owner/valid-repo, got %s", entries[0].Repo)
+	}
+
+	// ClearAll should remove all files including .tmp- files
+	cleared, err := cm.ClearAll()
+	if err != nil {
+		t.Fatalf("failed to clear all: %v", err)
+	}
+	if cleared < 2 {
+		t.Errorf("expected at least 2 files cleared (valid + temp), got %d", cleared)
 	}
 }
 
