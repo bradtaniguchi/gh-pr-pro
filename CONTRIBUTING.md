@@ -13,6 +13,9 @@ To develop and test `gh-pr-pro`, ensure you have the following installed:
 - **Go**: `1.22+` (Go `1.24+` recommended). Verify with `go version`.
 - **GitHub CLI (`gh`)**: `v2.20.0+`. Verify with `gh version`.
 - **golangci-lint**: `v2.0+` recommended for static analysis (`brew install golangci-lint` or see [golangci-lint installation](https://golangci-lint.run/welcome/install/)).
+- **Lefthook**: Git hook manager (Go binary, zero runtime dependency).
+  Install via `go install github.com/evilmartians/lefthook@latest` or `brew install lefthook`.
+
 - **GitHub Account Authentication & Scopes**:
   ```bash
   # Check current auth status and granted token scopes
@@ -54,11 +57,13 @@ To develop and test `gh-pr-pro`, ensure you have the following installed:
    gh pr-pro --help
    ```
 
-4. **Initialize Git pre-commit hooks** (recommended):
+4. **Initialize Git hooks** (required):
    ```bash
    make init-hooks
    ```
-   This configures Git's native `core.hooksPath` to use `.githooks/pre-commit`, running `make check-fast` (module tidy check and `golangci-lint` static analysis & formatting) before each commit for rapid, sub-second developer feedback. Comprehensive test suites, race detection, vulnerability scans, and schema audits are handled in CI/CD and the full `make check` target.
+   This installs [Lefthook](https://github.com/evilmartians/lefthook) hooks into `.git/hooks/`:
+   - **`pre-commit`**: Runs `make tidy-check` and `make check-fast` in parallel for rapid sub-second feedback. Comprehensive test suites, race detection, vulnerability scans, and schema audits are handled in CI/CD and the full `make check` target.
+   - **`commit-msg`**: Validates the commit subject against [Conventional Commits](https://www.conventionalcommits.org/) format (see [Commit Message Guidelines](#commit-message-guidelines) below).
 
 ---
 
@@ -119,6 +124,51 @@ gh pr-pro time merge --past 7d -R cli/cli
 
 > [!TIP]
 > Use `-R <owner>/<repo>` (e.g., `-R cli/cli` or `-R golang/go`) when testing commands without needing to be inside a local git clone of that repository.
+
+---
+
+## Commit Message Guidelines
+
+All commits must follow [Conventional Commits](https://www.conventionalcommits.org/) format. This is enforced locally by Lefthook's `commit-msg` hook and ensures automated changelog generation (`.agents/skills/release-prep/scripts/generate_release_notes.sh`) works correctly.
+
+### Format
+
+```
+<type>(<scope>): <subject>
+```
+
+- **`type`** (required): Describes the kind of change (see table below).
+- **`scope`** (optional): Lowercase identifier in parentheses for the area of change.
+- **`subject`** (required): Short imperative description, no trailing period.
+- Append `!` after `type`/`scope` to denote a breaking change (e.g., `feat(api)!: change GraphQL schema`).
+
+### Commit Types → Changelog Categories
+
+| Type | Changelog Section |
+|------|-------------------|
+| `feat` | 🚀 Features |
+| `fix` | 🐛 Bug Fixes |
+| `perf` | ⚡ Performance Improvements |
+| `docs` | 📚 Documentation |
+| `refactor`, `ci`, `chore` | 🛠️ Maintenance & CI |
+| `test` | (internal, not surfaced in release notes) |
+| `build`, `style`, `revert` | (contextual) |
+
+### Common Scopes
+
+`api`, `cache`, `metrics`, `export`, `cmd`, `skills`, `ci`, `docs`
+
+### Examples
+
+```bash
+feat(cache): add delta-fetch support for large repos
+fix(api): handle HTTP 504 timeout with adaptive page-size halving
+perf(metrics): memoize percentile calculations
+docs(contributing): add Lefthook setup instructions
+chore(ci): update golangci-lint to v2.1
+refactor(cmd): extract flag registration helpers
+test(metrics): add table-driven tests for p99 calculation
+```
 
 ---
 
@@ -196,8 +246,7 @@ gh-pr-pro/
 │       ├── add-metric/             # AI skill to scaffold & integrate new metric subcommands
 │       ├── schema-regression-test/ # AI skill to audit & verify output schemas (JSON/CSV/TSV/MD)
 │       └── release-prep/           # AI skill for cross-compile verification, notes & tagging
-├── .githooks/
-│   └── pre-commit                 # Zero-dependency pre-commit verification hook
+├── lefthook.yml                   # Declarative Lefthook git hook config (pre-commit + commit-msg)
 ├── .github/
 │   ├── ISSUE_TEMPLATE/
 │   │   ├── bug_report.md          # Bug report issue template

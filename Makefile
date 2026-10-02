@@ -38,10 +38,11 @@ check: tidy-check lint vulncheck test audit-readme audit-schema ## Run full qual
 
 check-fast: tidy-check lint ## Run fast pre-commit check (tidy and lint; tests and vulncheck deferred to CI)
 
-init-hooks: ## Configure git to use project pre-commit hooks (.githooks)
-	git config core.hooksPath .githooks
-	@chmod +x .githooks/* 2>/dev/null || true
-	@echo "Git hooks configured: core.hooksPath is set to .githooks"
+init-hooks: ## Install Lefthook git hooks (pre-commit + commit-msg Conventional Commits validation)
+	@command -v lefthook >/dev/null 2>&1 || { echo "❌ lefthook not found. Install with: go install github.com/evilmartians/lefthook@latest"; exit 1; }
+	@git config --unset core.hooksPath 2>/dev/null || true
+	lefthook install
+	@echo "✅ Lefthook hooks installed (pre-commit + commit-msg)"
 
 fmt: ## Format Go code with golangci-lint fmt (enforcing gofumpt)
 	@if ! command -v golangci-lint >/dev/null 2>&1; then \

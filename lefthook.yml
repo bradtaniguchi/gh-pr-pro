@@ -1,0 +1,16 @@
+# lefthook.yml — Declarative git hook configuration for gh-pr-pro
+# Install hooks with: make init-hooks
+# https://github.com/evilmartians/lefthook
+
+pre-commit:
+  parallel: true
+  commands:
+    tidy-check:
+      run: make tidy-check
+    check-fast:
+      run: make check-fast
+
+commit-msg:
+  commands:
+    conventional-commits:
+      run: .github/scripts/validate-conventional-commit.sh {1}
