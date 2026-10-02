@@ -12,8 +12,10 @@ Fixes #
 
 ## Contributor Verification Checklist
 <!-- Please complete the following checklist before requesting a review. -->
+- [ ] PR title and all commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) format (`<type>(<scope>): <subject>`).
 - [ ] I have run `make check` locally and all checks (tidy, lint, vulncheck, test, audit-readme, audit-schema) pass.
 - [ ] All unit tests pass with race detector enabled (`make test` or `go test -race ./...`).
+
 - [ ] If changing or adding CLI commands/flags, I have updated `README.md` and verified with `make audit-readme`.
 - [ ] If changing output serialization schemas, I have verified with `make audit-schema`.
 - [ ] I have added appropriate tests covering bug fixes or new functionality.
