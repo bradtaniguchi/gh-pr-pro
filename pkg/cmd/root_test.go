@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/brad/gh-pr-pro/pkg/cache"
 	"github.com/brad/gh-pr-pro/pkg/metrics"
 	"github.com/brad/gh-pr-pro/pkg/ui"
 	"github.com/spf13/cobra"
@@ -546,15 +545,10 @@ func TestFetchAndProcessPRs(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			tempHome := t.TempDir()
-			t.Setenv("HOME", tempHome)
+			_, cm := setupIsolatedTestHome(t)
 			t.Setenv("GH_TOKEN", "mock-test-token")
 
 			if tc.setupCache {
-				cm, err := cache.NewCacheManager()
-				if err != nil {
-					t.Fatalf("failed to create cache manager: %v", err)
-				}
 				if err := cm.Save(tc.repo, mockPRs); err != nil {
 					t.Fatalf("failed to save mock cache: %v", err)
 				}
@@ -588,8 +582,7 @@ func TestFetchAndProcessPRs(t *testing.T) {
 }
 
 func TestRunMetricCommandWithOpts_Cached(t *testing.T) {
-	tempHome := t.TempDir()
-	t.Setenv("HOME", tempHome)
+	_, cm := setupIsolatedTestHome(t)
 	t.Setenv("GH_TOKEN", "mock-test-token")
 
 	repo := "testowner/testrepo"
@@ -608,10 +601,6 @@ func TestRunMetricCommandWithOpts_Cached(t *testing.T) {
 		},
 	}
 
-	cm, err := cache.NewCacheManager()
-	if err != nil {
-		t.Fatalf("failed to create cache manager: %v", err)
-	}
 	if err := cm.Save(repo, mockPRs); err != nil {
 		t.Fatalf("failed to save mock cache: %v", err)
 	}
@@ -656,8 +645,7 @@ func TestRunMetricCommandWithOpts_Cached(t *testing.T) {
 }
 
 func TestOverviewAndExportCommands_Cached(t *testing.T) {
-	tempHome := t.TempDir()
-	t.Setenv("HOME", tempHome)
+	_, cm := setupIsolatedTestHome(t)
 	t.Setenv("GH_TOKEN", "mock-test-token")
 
 	repo := "testowner/scorecard-repo"
@@ -676,10 +664,6 @@ func TestOverviewAndExportCommands_Cached(t *testing.T) {
 		},
 	}
 
-	cm, err := cache.NewCacheManager()
-	if err != nil {
-		t.Fatalf("failed to create cache manager: %v", err)
-	}
 	if err := cm.Save(repo, mockPRs); err != nil {
 		t.Fatalf("failed to save mock cache: %v", err)
 	}
