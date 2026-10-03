@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -151,5 +153,111 @@ func TestCacheStatusAndMigrateExecution(t *testing.T) {
 	}
 	if clearedCorrupt != 1 {
 		t.Errorf("expected 1 corrupt file cleared, got %d", clearedCorrupt)
+	}
+}
+
+func TestCacheStatusCommandColumns(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	cacheDir := filepath.Join(tempHome, ".cache", "gh-pr-pro")
+	cm := cache.NewCacheManagerWithDir(cacheDir)
+
+	prs := []metrics.ProcessedPR{
+		{Number: 1, Title: "PR 1", State: "MERGED", CreatedAt: time.Now()},
+	}
+	if err := cm.Save("owner/repo", prs); err != nil {
+		t.Fatalf("failed to save cache: %v", err)
+	}
+
+	// Capture table output
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	os.Stdout = w
+
+	outChan := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(r)
+		outChan <- buf.String()
+	}()
+
+	runErr := cacheStatusCmd.RunE(cacheStatusCmd, []string{})
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	if runErr != nil {
+		t.Fatalf("cacheStatusCmd failed: %v", runErr)
+	}
+
+	output := <-outChan
+
+	// Verify issue #21 requirements:
+	// Columns: REPOSITORY, VERSION, PRS, DISK SIZE, LAST SYNCED
+	// ACTION column removed; STATUS column removed from table header
+	lines := strings.Split(output, "\n")
+	if len(lines) == 0 {
+		t.Fatalf("expected non-empty output")
+	}
+
+	headerLine := lines[0]
+	expectedHeaders := []string{"REPOSITORY", "VERSION", "PRS", "DISK SIZE", "LAST SYNCED"}
+	for _, h := range expectedHeaders {
+		if !strings.Contains(headerLine, h) {
+			t.Errorf("expected header line to contain %q, got: %s", h, headerLine)
+		}
+	}
+
+	if strings.Contains(headerLine, "ACTION") {
+		t.Errorf("header line should not contain ACTION column, got: %s", headerLine)
+	}
+	if strings.Contains(headerLine, "STATUS") {
+		t.Errorf("header line should not contain STATUS column, got: %s", headerLine)
+	}
+
+	// Test JSON mode
+	flagCacheStatusJSON = true
+	defer func() { flagCacheStatusJSON = false }()
+
+	rJSON, wJSON, _ := os.Pipe()
+	os.Stdout = wJSON
+
+	jsonOutChan := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(rJSON)
+		jsonOutChan <- buf.String()
+	}()
+
+	runJSONErr := cacheStatusCmd.RunE(cacheStatusCmd, []string{})
+	_ = wJSON.Close()
+	os.Stdout = oldStdout
+
+	if runJSONErr != nil {
+		t.Fatalf("cacheStatusCmd --json failed: %v", runJSONErr)
+	}
+
+	jsonOutput := <-jsonOutChan
+	var statusData map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonOutput), &statusData); err != nil {
+		t.Fatalf("failed to parse json output: %v\nOutput: %s", err, jsonOutput)
+	}
+
+	items, ok := statusData["items"].([]interface{})
+	if !ok || len(items) == 0 {
+		t.Fatalf("expected non-empty items array in json, got: %+v", statusData)
+	}
+
+	firstItem := items[0].(map[string]interface{})
+	if _, ok := firstItem["last_fetched"]; !ok {
+		t.Errorf("expected item to contain 'last_fetched', got: %+v", firstItem)
+	}
+	if _, ok := firstItem["action"]; ok {
+		t.Errorf("item should not contain 'action', got: %+v", firstItem)
+	}
+	if _, ok := firstItem["status"]; ok {
+		t.Errorf("item should not contain 'status', got: %+v", firstItem)
 	}
 }

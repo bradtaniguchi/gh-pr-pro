@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"text/tabwriter"
+	"time"
 
 	"github.com/brad/gh-pr-pro/pkg/cache"
 	"github.com/spf13/cobra"
@@ -31,7 +32,7 @@ subsequent queries and prevent GitHub GraphQL API rate limit exhaustion.`,
 	Example: `  # List all cached repositories and disk space usage
   gh pr-pro cache list
 
-  # Check cache health, semantic versions, and recommended actions
+  # Check cache health, schema versions, and migration status
   gh pr-pro cache status
 
   # Migrate all outdated cache files to the current package version
@@ -137,44 +138,34 @@ var cacheStatusCmd = &cobra.Command{
 		}
 
 		type StatusItem struct {
-			Repo      string            `json:"repo"`
-			Version   string            `json:"version"`
-			Status    cache.CacheStatus `json:"status"`
-			PRCount   int               `json:"pr_count"`
-			SizeBytes int64             `json:"size_bytes"`
-			Action    string            `json:"action"`
+			Repo        string    `json:"repo"`
+			Version     string    `json:"version"`
+			PRCount     int       `json:"pr_count"`
+			SizeBytes   int64     `json:"size_bytes"`
+			LastFetched time.Time `json:"last_fetched"`
 		}
 
 		var items []StatusItem
 		var currentCount, outdatedCount, futureCount, corruptCount int
 
 		for _, e := range entries {
-			action := "Up to date"
 			switch e.Status {
 			case cache.StatusCurrent:
 				currentCount++
 			case cache.StatusOutdated:
 				outdatedCount++
-				if e.IsMigratable {
-					action = fmt.Sprintf("Run 'gh pr-pro cache migrate %s'", e.Repo)
-				} else {
-					action = fmt.Sprintf("Run 'gh pr-pro cache clean %s' to re-sync", e.Repo)
-				}
 			case cache.StatusFuture:
 				futureCount++
-				action = "Upgrade gh-pr-pro extension"
 			case cache.StatusCorrupt:
 				corruptCount++
-				action = "Run 'gh pr-pro cache clean --corrupt'"
 			}
 
 			items = append(items, StatusItem{
-				Repo:      e.Repo,
-				Version:   e.Version,
-				Status:    e.Status,
-				PRCount:   e.PRCount,
-				SizeBytes: e.SizeBytes,
-				Action:    action,
+				Repo:        e.Repo,
+				Version:     e.Version,
+				PRCount:     e.PRCount,
+				SizeBytes:   e.SizeBytes,
+				LastFetched: e.LastFetched,
 			})
 		}
 
@@ -199,12 +190,16 @@ var cacheStatusCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-		fmt.Fprintln(w, "REPOSITORY\tVERSION\tSTATUS\tPRS\tDISK SIZE\tACTION")
-		fmt.Fprintln(w, "──────────\t───────\t──────\t───\t─────────\t──────")
+		fmt.Fprintln(w, "REPOSITORY\tVERSION\tPRS\tDISK SIZE\tLAST SYNCED")
+		fmt.Fprintln(w, "──────────\t───────\t───\t─────────\t───────────")
 
 		for _, item := range items {
 			sizeStr := formatByteSize(item.SizeBytes)
-			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n", item.Repo, item.Version, item.Status, item.PRCount, sizeStr, item.Action)
+			timeStr := item.LastFetched.Format("2006-01-02 15:04:05")
+			if item.LastFetched.IsZero() {
+				timeStr = "unknown"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\n", item.Repo, item.Version, item.PRCount, sizeStr, timeStr)
 		}
 		_ = w.Flush()
 
