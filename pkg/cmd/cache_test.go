@@ -157,10 +157,7 @@ func TestCacheStatusAndMigrateExecution(t *testing.T) {
 }
 
 func TestCacheStatusCommandColumns(t *testing.T) {
-	tempHome := t.TempDir()
-	t.Setenv("HOME", tempHome)
-	cacheDir := filepath.Join(tempHome, ".cache", "gh-pr-pro")
-	cm := cache.NewCacheManagerWithDir(cacheDir)
+	_, cm := setupIsolatedTestHome(t)
 
 	prs := []metrics.ProcessedPR{
 		{Number: 1, Title: "PR 1", State: "MERGED", CreatedAt: time.Now()},
