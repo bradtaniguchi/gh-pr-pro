@@ -43,6 +43,21 @@ gh pr-pro overview --past 30d
 
 ---
 
+## AI Agent & Automation Guidance
+
+When invoking `gh-pr-pro` from an AI coding agent, CI workflow, or automation script:
+
+* **Executive Scorecard**: Prefer `gh pr-pro overview --past 30d --json` for a high-level summary covering cycle times, review latency, CI stability, and team velocity rather than exporting raw records.
+* **Domain Subcommands**: Query purpose-built subcommands with `--json` for structured metrics:
+  * Merge & review cycle times: `gh pr-pro time merge --json`, `gh pr-pro time review --json`
+  * CI stability & rework: `gh pr-pro quality ci --json`, `gh pr-pro quality rework --json`
+  * Sizing & file distribution: `gh pr-pro code size --json`
+  * Throughput & reviewer workload: `gh pr-pro team throughput --json`, `gh pr-pro team reviews --json`
+* **Default Time Window**: All analytical commands default to `--past 30d`. Always pass `--past <duration>` (e.g., `--past 90d`, `--past 1y`) or `--since <YYYY-MM-DD>` (optionally with `--until`) when evaluating custom time ranges.
+* **Data Pipelines**: Reserve `export` strictly for external ETL streaming (DuckDB, Pandas, Snowflake, PostgreSQL). Avoid using `export` to compute percentiles or aggregates in prompt context.
+
+---
+
 ## Flag Scoping & Reference
 
 `gh-pr-pro` uses scoped command flags to ensure clean and intuitive CLI interactions. Flags are structured into **Global Flags**, **Domain / Metric Flags**, and **Cache Flags**:
@@ -318,6 +333,11 @@ gh pr-pro overview --past 30d
 
 #### `export`
 Streams unaggregated, per-PR raw records containing all metric dimensions for downstream BI, DuckDB, or Pandas ingestion.
+
+> [!NOTE]
+> **Automation & Agent Guidance**:
+> * **Default Time Window**: Defaults to `--past 30d`. For broader historical exports, explicitly specify `--past <duration>` (e.g., `--past 1y`) or `--since <YYYY-MM-DD>`.
+> * **Avoid for Aggregate Metrics**: Do not use `export` to compute percentiles, cycle times, or CI failure rates. Use domain commands (`overview`, `time`, `quality`, `code`, `team`) with `--json` which calculate statistical percentiles and aggregations natively.
 
 ```bash
 gh pr-pro export --past 1y --csv > pr_export_2025.csv

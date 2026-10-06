@@ -12,8 +12,15 @@ var exportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Stream raw, unaggregated PR records for data pipelines",
 	Long: `Exports flattened, unaggregated per-PR records with all calculated timestamps, review latencies,
-CI status check runs, reviewers, labels, and commit metrics. Designed for streaming into data pipelines,
-DuckDB, Pandas, Snowflake, or PostgreSQL.`,
+CI status check runs, reviewers, labels, and commit metrics. Designed strictly for streaming into
+data pipelines and analytical engines (DuckDB, Pandas, Snowflake, PostgreSQL).
+
+` + "AUTOMATION & AGENT GUIDANCE:\n" +
+		"  • Default Window: Defaults to `--past 30d`. For broader historical exports, explicitly specify\n" +
+		"    `--past <duration>` (e.g. `--past 1y`) or `--since <YYYY-MM-DD>`.\n" +
+		"  • Avoid for Aggregate Metrics: Do not use `export` to compute percentiles, cycle times, or CI\n" +
+		"    failure rates. Use domain commands (`overview`, `time`, `quality`, `code`, `team`) with `--json`\n" +
+		"    which calculate statistical percentiles and aggregations natively.",
 	Example: `  # Stream 1 year of raw PR records to CSV
   gh pr-pro export --past 1y --csv > pr_metrics_2025.csv
 
