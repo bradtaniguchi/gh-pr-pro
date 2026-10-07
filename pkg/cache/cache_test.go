@@ -490,8 +490,13 @@ func TestCacheVersioningAndMigration(t *testing.T) {
     {
       "number": 42,
       "title": "v0.2.0 PR",
+      "author": "alice",
       "state": "MERGED",
-      "created_at": "2025-06-01T00:00:00Z"
+      "created_at": "2025-06-01T00:00:00Z",
+      "additions": 150,
+      "deletions": 25,
+      "time_to_merge_seconds": 3600,
+      "labels": ["enhancement"]
     }
   ]
 }`
@@ -504,8 +509,8 @@ func TestCacheVersioningAndMigration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed loading v0.2.0 cache: %v", err)
 	}
-	if len(prs) != 1 || prs[0].Number != 42 {
-		t.Errorf("expected 1 loaded PR from v0.2.0 cache, got %+v", prs)
+	if len(prs) != 1 || prs[0].Number != 42 || prs[0].Author != "alice" || prs[0].Additions != 150 || prs[0].TimeToMergeSeconds == nil || *prs[0].TimeToMergeSeconds != 3600 {
+		t.Errorf("expected 1 loaded PR with preserved metadata from v0.2.0 cache, got %+v", prs)
 	}
 
 	entries, _ = cm.ListEntries()

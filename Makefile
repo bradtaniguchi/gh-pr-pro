@@ -8,7 +8,7 @@ LDFLAGS ?= -s -w -X github.com/brad/gh-pr-pro/pkg/version.Version=$(VERSION)
 LEFTHOOK_BIN ?= $(shell which lefthook 2>/dev/null || echo $(shell go env GOPATH)/bin/lefthook)
 GOLANGCI_LINT_BIN ?= $(shell which golangci-lint 2>/dev/null || echo $(shell go env GOPATH)/bin/golangci-lint)
 
-.PHONY: all help build install test test-v cover cover-text vet fmt fmt-check lint tidy-check clean check check-fast doc audit-readme audit-schema check-cross-compile init-hooks init-tools setup vulncheck
+.PHONY: all help build install test test-v cover cover-text vet fmt fmt-check lint tidy-check clean check check-fast doc audit-readme audit-schema check-cross-compile init-hooks init-tools setup vulncheck _install-lefthook _install-golangci-lint
 
 ##@ Build & Execution
 
@@ -47,42 +47,34 @@ check-fast: tidy-check lint ## Run fast pre-commit check (tidy and lint; tests a
 
 ##@ Setup & Developer Environment
 
-setup: init-tools init-hooks ## Install all developer tools (lefthook, golangci-lint) and git hooks
-
-init-tools: ## Install development tools (lefthook, golangci-lint)
+_install-lefthook:
 	@if ! command -v lefthook >/dev/null 2>&1 && [ ! -x "$(LEFTHOOK_BIN)" ]; then \
 		echo "📦 Installing lefthook $(LEFTHOOK_VERSION)..."; \
 		go install github.com/evilmartians/lefthook@$(LEFTHOOK_VERSION); \
 	fi
+
+_install-golangci-lint:
 	@if ! command -v golangci-lint >/dev/null 2>&1 && [ ! -x "$(GOLANGCI_LINT_BIN)" ]; then \
 		echo "📦 Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."; \
 		go install $(GOLANGCI_LINT_MODULE)@$(GOLANGCI_LINT_VERSION); \
 	fi
+
+setup: init-tools init-hooks ## Install all developer tools (lefthook, golangci-lint) and git hooks
+
+init-tools: _install-lefthook _install-golangci-lint ## Install development tools (lefthook, golangci-lint)
 	@echo "✅ Developer tools installed"
 
-init-hooks: ## Install Lefthook git hooks (auto-installs lefthook via go install if missing)
-	@if ! command -v lefthook >/dev/null 2>&1 && [ ! -x "$(LEFTHOOK_BIN)" ]; then \
-		echo "📦 Installing lefthook $(LEFTHOOK_VERSION) via go install..."; \
-		go install github.com/evilmartians/lefthook@$(LEFTHOOK_VERSION); \
-	fi
+init-hooks: _install-lefthook ## Install Lefthook git hooks (auto-installs lefthook via go install if missing)
 	@git config --unset core.hooksPath 2>/dev/null || true
 	@$(LEFTHOOK_BIN) install
 	@echo "✅ Lefthook hooks installed (pre-commit + commit-msg)"
 
-fmt: ## Format Go code with golangci-lint fmt (auto-installs if missing)
-	@if ! command -v golangci-lint >/dev/null 2>&1 && [ ! -x "$(GOLANGCI_LINT_BIN)" ]; then \
-		echo "📦 Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."; \
-		go install $(GOLANGCI_LINT_MODULE)@$(GOLANGCI_LINT_VERSION); \
-	fi
+fmt: _install-golangci-lint ## Format Go code with golangci-lint fmt (auto-installs if missing)
 	@$(GOLANGCI_LINT_BIN) fmt
 
 fmt-check: lint ## Verify Go code formatting (delegates to golangci-lint)
 
-lint: ## Run comprehensive static analysis with golangci-lint (auto-installs if missing)
-	@if ! command -v golangci-lint >/dev/null 2>&1 && [ ! -x "$(GOLANGCI_LINT_BIN)" ]; then \
-		echo "📦 Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."; \
-		go install $(GOLANGCI_LINT_MODULE)@$(GOLANGCI_LINT_VERSION); \
-	fi
+lint: _install-golangci-lint ## Run comprehensive static analysis with golangci-lint (auto-installs if missing)
 	@$(GOLANGCI_LINT_BIN) run ./...
 
 vet: ## Run go vet static analysis

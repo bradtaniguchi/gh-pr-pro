@@ -98,6 +98,7 @@ jobs:
         with:
           go_version_file: go.mod
           release_tag: ${{ inputs.tag || github.ref_name }}
+          # Outer single quotes and inner double quotes preserve ldflags arguments verbatim across subshell invocations
           go_build_options: '-ldflags="-s -w -X github.com/brad/gh-pr-pro/pkg/version.Version=${{ inputs.tag || github.ref_name }}"'
 
       - name: Generate and publish categorized release notes
