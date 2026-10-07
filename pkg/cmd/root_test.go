@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -752,5 +753,40 @@ func TestSpinnerProgressCallbackMessageFormat(t *testing.T) {
 				t.Errorf("expected msg %q, got %q", tc.expected, msg)
 			}
 		})
+	}
+}
+
+func TestRootCmdAgentGuidance(t *testing.T) {
+	requiredPhrases := []string{
+		"AI AGENT & AUTOMATION GUIDANCE:",
+		"gh pr-pro overview --past 30d --json",
+		"gh pr-pro time merge --json",
+		"gh pr-pro quality ci --json",
+		"gh pr-pro code size --json",
+		"gh pr-pro team throughput --json",
+		"gh pr-pro team reviews --json",
+		"All commands default to `--past 30d`",
+		"Reserve `export` strictly for external ETL streaming",
+	}
+
+	for _, phrase := range requiredPhrases {
+		if !strings.Contains(RootCmd.Long, phrase) {
+			t.Errorf("RootCmd.Long missing expected guidance phrase: %q", phrase)
+		}
+	}
+}
+
+func TestExportCmdAgentGuidance(t *testing.T) {
+	requiredPhrases := []string{
+		"AUTOMATION & AGENT GUIDANCE:",
+		"Defaults to `--past 30d`",
+		"Avoid for Aggregate Metrics",
+		"Do not use `export` to compute percentiles",
+	}
+
+	for _, phrase := range requiredPhrases {
+		if !strings.Contains(exportCmd.Long, phrase) {
+			t.Errorf("exportCmd.Long missing expected guidance phrase: %q", phrase)
+		}
 	}
 }

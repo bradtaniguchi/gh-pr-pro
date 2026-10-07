@@ -71,7 +71,23 @@ It calculates statistical percentiles (p50, p75, p90, p95, p99), distributions, 
   • team     - PR velocity throughput, reviewer workload distribution, and unreviewed PR bypass rates
   • overview - Multi-domain executive scorecard
   • export   - Raw, flattened per-PR records streaming for data pipelines (CSV/JSON)
-  • cache    - Inspect, list, and clean local repository cache files`,
+  • cache    - Inspect, list, and clean local repository cache files
+
+` + "AI AGENT & AUTOMATION GUIDANCE:\n" +
+		"  When using gh-pr-pro from an AI agent or script:\n" +
+		"  • Executive Overview: Prefer `gh pr-pro overview --past 30d --json` for a high-level\n" +
+		"    scorecard covering cycle times, review latency, CI stability, and team velocity\n" +
+		"    rather than exporting raw records.\n" +
+		"  • Specific Analytical Questions: Query the purpose-built domain subcommands with `--json`:\n" +
+		"      - Merge & review cycle times: `gh pr-pro time merge --json`, `gh pr-pro time review --json`\n" +
+		"      - CI stability & rework:      `gh pr-pro quality ci --json`, `gh pr-pro quality rework --json`\n" +
+		"      - Sizing & file distribution: `gh pr-pro code size --json`\n" +
+		"      - Throughput & reviewer load: `gh pr-pro team throughput --json`, `gh pr-pro team reviews --json`\n" +
+		"  • Default Time Window: All commands default to `--past 30d`. When analyzing custom ranges\n" +
+		"    or historical data, always pass `--past <duration>` (e.g. `--past 90d`, `--past 1y`)\n" +
+		"    or `--since <YYYY-MM-DD>` (optionally with `--until`).\n" +
+		"  • Data Pipelines: Reserve `export` strictly for external ETL streaming (DuckDB, Pandas,\n" +
+		"    Snowflake, PostgreSQL). Avoid `export` for aggregate analysis.",
 	Example: `  # Analyze time to merge over the last 90 days grouped by month
   gh pr-pro time merge --past 90d --group-by month
 
