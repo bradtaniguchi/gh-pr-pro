@@ -1,5 +1,7 @@
 BINARY_NAME ?= gh-pr-pro
 GOVULNCHECK_VERSION ?= v1.8.0
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+LDFLAGS ?= -s -w -X github.com/brad/gh-pr-pro/pkg/version.Version=$(VERSION)
 
 .PHONY: all help build install test test-v cover cover-text vet fmt fmt-check lint tidy-check clean check check-fast doc audit-readme audit-schema check-cross-compile init-hooks vulncheck
 
@@ -8,10 +10,10 @@ GOVULNCHECK_VERSION ?= v1.8.0
 all: tidy-check lint test audit-readme audit-schema build ## Tidy, lint, test, audit, and build binary
 
 build: ## Build the gh-pr-pro binary
-	go build -o $(BINARY_NAME) .
+	go build -ldflags="$(LDFLAGS)" -o $(BINARY_NAME) .
 
 install: ## Install binary to $GOPATH/bin
-	go install .
+	go install -ldflags="$(LDFLAGS)" .
 
 check-cross-compile: ## Verify cross-compilation across all 5 target platforms
 	./.agents/skills/release-prep/scripts/verify_cross_compile.sh

@@ -9,7 +9,8 @@ import (
 )
 
 // Version is the current semantic release version of the gh-pr-pro package.
-var Version = "v0.2.0"
+// For official distribution builds, this value is injected at compile time via -ldflags.
+var Version = "v0.3.0"
 
 // SemVer represents a parsed semantic version components (MAJOR.MINOR.PATCH[-PRERELEASE]).
 type SemVer struct {

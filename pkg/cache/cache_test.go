@@ -480,6 +480,47 @@ func TestCacheVersioningAndMigration(t *testing.T) {
 	if fromVer != CurrentVersion || toVer != CurrentVersion {
 		t.Errorf("expected no-op migration, got %s to %s", fromVer, toVer)
 	}
+
+	// 7. Test migration of a v0.2.0 cache file to CurrentVersion
+	v2JSON := `{
+  "version": "v0.2.0",
+  "repo": "owner/v2repo",
+  "last_fetched": "2025-06-01T00:00:00Z",
+  "prs": [
+    {
+      "number": 42,
+      "title": "v0.2.0 PR",
+      "state": "MERGED",
+      "created_at": "2025-06-01T00:00:00Z"
+    }
+  ]
+}`
+	v2Path := cm.getFilePath("owner/v2repo")
+	if err := os.WriteFile(v2Path, []byte(v2JSON), 0o600); err != nil {
+		t.Fatalf("failed writing v0.2.0 cache: %v", err)
+	}
+
+	prs, _, err = cm.Load("owner/v2repo")
+	if err != nil {
+		t.Fatalf("failed loading v0.2.0 cache: %v", err)
+	}
+	if len(prs) != 1 || prs[0].Number != 42 {
+		t.Errorf("expected 1 loaded PR from v0.2.0 cache, got %+v", prs)
+	}
+
+	entries, _ = cm.ListEntries()
+	var foundV2 bool
+	for _, e := range entries {
+		if e.Repo == "owner/v2repo" {
+			foundV2 = true
+			if e.Version != CurrentVersion || e.Status != StatusCurrent {
+				t.Errorf("expected v0.2.0 cache to be migrated to %s, got %s (status %s)", CurrentVersion, e.Version, e.Status)
+			}
+		}
+	}
+	if !foundV2 {
+		t.Errorf("expected to find owner/v2repo in entries")
+	}
 }
 
 func TestCacheFutureVersionProtection(t *testing.T) {
