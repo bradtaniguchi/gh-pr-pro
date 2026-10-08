@@ -36,6 +36,8 @@ func NewMigrator() *Migrator {
 	}
 	// Register legacy v0.0.0 (unversioned) -> CurrentVersion migration
 	m.Register(LegacyVersion, migrateLegacyToCurrent)
+	// Register compatible v0.2.0 -> CurrentVersion migration (schema unchanged)
+	m.Register("v0.2.0", migrateLegacyToCurrent)
 	return m
 }
 

@@ -12,9 +12,8 @@ To develop and test `gh-pr-pro`, ensure you have the following installed:
 
 - **Go**: `1.22+` (Go `1.24+` recommended). Verify with `go version`.
 - **GitHub CLI (`gh`)**: `v2.20.0+`. Verify with `gh version`.
-- **golangci-lint**: `v2.0+` recommended for static analysis (`brew install golangci-lint` or see [golangci-lint installation](https://golangci-lint.run/welcome/install/)).
-- **Lefthook**: Git hook manager (Go binary, zero runtime dependency).
-  Install via `go install github.com/evilmartians/lefthook@latest` or `brew install lefthook`.
+- **golangci-lint**: `v2.0+` (`v2.14.0+`) for static analysis (automatically installed by `make setup` / `make lint` via `go install`).
+- **Lefthook**: Git hook manager (automatically installed by `make setup` / `make init-hooks` via `go install`).
 
 - **GitHub Account Authentication & Scopes**:
   ```bash
@@ -57,11 +56,11 @@ To develop and test `gh-pr-pro`, ensure you have the following installed:
    gh pr-pro --help
    ```
 
-4. **Initialize Git hooks** (required):
+4. **Initialize developer tools & Git hooks** (recommended):
    ```bash
-   make init-hooks
+   make setup
    ```
-   This installs [Lefthook](https://github.com/evilmartians/lefthook) hooks into `.git/hooks/`:
+   This automatically installs the developer tools (`lefthook`, `golangci-lint`) and configures [Lefthook](https://github.com/evilmartians/lefthook) hooks into `.git/hooks/` (or use `make init-hooks` to only install the git hooks):
    - **`pre-commit`**: Runs `make tidy-check` and `make check-fast` in parallel for rapid sub-second feedback. Comprehensive test suites, race detection, vulnerability scans, and schema audits are handled in CI/CD and the full `make check` target.
    - **`commit-msg`**: Validates the commit subject against [Conventional Commits](https://www.conventionalcommits.org/) format (see [Commit Message Guidelines](#commit-message-guidelines) below).
 
@@ -75,7 +74,10 @@ A `Makefile` is included to streamline common build, test, and formatting tasks:
 # Display all available Make targets
 make help
 
-# Configure project git pre-commit hooks (.githooks)
+# Install developer tools (lefthook, golangci-lint) and git hooks
+make setup
+
+# Configure project git pre-commit hooks (auto-installs lefthook if missing)
 make init-hooks
 
 # Tidy dependencies, lint, test, audit README & schemas, and build the binary
@@ -345,7 +347,7 @@ Follow the [`add-metric`](file:///Users/brad/Projects/gh-pr-pro/.agents/skills/a
 
 ## Submitting Pull Requests
 
-1. Initialize git pre-commit hooks (if not done yet): `make init-hooks`.
+1. Initialize developer tools and git hooks (if not done yet): `make setup` (or `make init-hooks`).
 2. Create a feature branch: `git checkout -b feat/my-new-metric`.
 3. Ensure quality checks pass: `make check`.
 4. Push to your fork and submit a Pull Request against `main` using the provided [pull request template](.github/pull_request_template.md).

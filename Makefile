@@ -1,17 +1,24 @@
 BINARY_NAME ?= gh-pr-pro
 GOVULNCHECK_VERSION ?= v1.8.0
+LEFTHOOK_VERSION ?= v1.13.6
+GOLANGCI_LINT_VERSION ?= v2.14.0
+GOLANGCI_LINT_MODULE ?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+LDFLAGS ?= -s -w -X github.com/brad/gh-pr-pro/pkg/version.Version=$(VERSION)
+LEFTHOOK_BIN ?= $(shell which lefthook 2>/dev/null || echo $(shell go env GOPATH)/bin/lefthook)
+GOLANGCI_LINT_BIN ?= $(shell which golangci-lint 2>/dev/null || echo $(shell go env GOPATH)/bin/golangci-lint)
 
-.PHONY: all help build install test test-v cover cover-text vet fmt fmt-check lint tidy-check clean check check-fast doc audit-readme audit-schema check-cross-compile init-hooks vulncheck
+.PHONY: all help build install test test-v cover cover-text vet fmt fmt-check lint tidy-check clean check check-fast doc audit-readme audit-schema check-cross-compile init-hooks init-tools setup vulncheck _install-lefthook _install-golangci-lint
 
 ##@ Build & Execution
 
 all: tidy-check lint test audit-readme audit-schema build ## Tidy, lint, test, audit, and build binary
 
 build: ## Build the gh-pr-pro binary
-	go build -o $(BINARY_NAME) .
+	go build -ldflags="$(LDFLAGS)" -o $(BINARY_NAME) .
 
 install: ## Install binary to $GOPATH/bin
-	go install .
+	go install -ldflags="$(LDFLAGS)" .
 
 check-cross-compile: ## Verify cross-compilation across all 5 target platforms
 	./.agents/skills/release-prep/scripts/verify_cross_compile.sh
@@ -38,29 +45,37 @@ check: tidy-check lint vulncheck test audit-readme audit-schema ## Run full qual
 
 check-fast: tidy-check lint ## Run fast pre-commit check (tidy and lint; tests and vulncheck deferred to CI)
 
-init-hooks: ## Install Lefthook git hooks (pre-commit + commit-msg Conventional Commits validation)
-	@command -v lefthook >/dev/null 2>&1 || { echo "❌ lefthook not found. Install with: go install github.com/evilmartians/lefthook@latest"; exit 1; }
+##@ Setup & Developer Environment
+
+_install-lefthook:
+	@if ! command -v lefthook >/dev/null 2>&1 && [ ! -x "$(LEFTHOOK_BIN)" ]; then \
+		echo "📦 Installing lefthook $(LEFTHOOK_VERSION)..."; \
+		go install github.com/evilmartians/lefthook@$(LEFTHOOK_VERSION); \
+	fi
+
+_install-golangci-lint:
+	@if ! command -v golangci-lint >/dev/null 2>&1 && [ ! -x "$(GOLANGCI_LINT_BIN)" ]; then \
+		echo "📦 Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."; \
+		go install $(GOLANGCI_LINT_MODULE)@$(GOLANGCI_LINT_VERSION); \
+	fi
+
+setup: init-tools init-hooks ## Install all developer tools (lefthook, golangci-lint) and git hooks
+
+init-tools: _install-lefthook _install-golangci-lint ## Install development tools (lefthook, golangci-lint)
+	@echo "✅ Developer tools installed"
+
+init-hooks: _install-lefthook ## Install Lefthook git hooks (auto-installs lefthook via go install if missing)
 	@git config --unset core.hooksPath 2>/dev/null || true
-	lefthook install
+	@$(LEFTHOOK_BIN) install
 	@echo "✅ Lefthook hooks installed (pre-commit + commit-msg)"
 
-fmt: ## Format Go code with golangci-lint fmt (enforcing gofumpt)
-	@if ! command -v golangci-lint >/dev/null 2>&1; then \
-		echo "Error: golangci-lint is required for formatting to match CI."; \
-		echo "Install it via 'brew install golangci-lint' or see https://golangci-lint.run/welcome/install/"; \
-		exit 1; \
-	fi
-	golangci-lint fmt
+fmt: _install-golangci-lint ## Format Go code with golangci-lint fmt (auto-installs if missing)
+	@$(GOLANGCI_LINT_BIN) fmt
 
 fmt-check: lint ## Verify Go code formatting (delegates to golangci-lint)
 
-lint: ## Run comprehensive static analysis with golangci-lint
-	@if ! command -v golangci-lint >/dev/null 2>&1; then \
-		echo "Error: golangci-lint is not installed."; \
-		echo "Install it via 'brew install golangci-lint' or see https://golangci-lint.run/welcome/install/"; \
-		exit 1; \
-	fi
-	golangci-lint run ./...
+lint: _install-golangci-lint ## Run comprehensive static analysis with golangci-lint (auto-installs if missing)
+	@$(GOLANGCI_LINT_BIN) run ./...
 
 vet: ## Run go vet static analysis
 	go vet ./...
