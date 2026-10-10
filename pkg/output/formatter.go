@@ -179,12 +179,29 @@ func renderTextTable(w io.Writer, out metrics.MetricOutput) error {
 	// Display any extra domain metrics
 	if len(s.ExtraMetrics) > 0 {
 		for k, v := range s.ExtraMetrics {
-			if k == "top_failing" {
+			switch k {
+			case "top_failing":
 				m, ok := v.(map[string]int)
 				if ok && len(m) > 0 {
 					fmt.Fprintln(w, "\nTop Failing Check Suites:")
 					for checkName, count := range m {
 						fmt.Fprintf(w, "  • %s: %d failures\n", checkName, count)
+					}
+				}
+			case "top_timed_out":
+				m, ok := v.(map[string]int)
+				if ok && len(m) > 0 {
+					fmt.Fprintln(w, "\nTop Timed Out Check Suites:")
+					for checkName, count := range m {
+						fmt.Fprintf(w, "  • %s: %d timeouts\n", checkName, count)
+					}
+				}
+			case "top_bottlenecks":
+				m, ok := v.(map[string]int)
+				if ok && len(m) > 0 {
+					fmt.Fprintln(w, "\nTop Critical Path Bottleneck Checks:")
+					for checkName, count := range m {
+						fmt.Fprintf(w, "  • %s: slowest in %d PRs\n", checkName, count)
 					}
 				}
 			}

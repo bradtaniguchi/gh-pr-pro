@@ -122,6 +122,8 @@ func TestFilterPRsAdvanced(t *testing.T) {
 			Deletions:         200,
 			ChangedFiles:      12,
 			HadCIFailure:      true,
+			HadCITimeout:      true,
+			CIStatus:          "TIMED_OUT",
 			CITotalRuns:       3,
 			HasMergeConflicts: true,
 			Assignees:         []string{"bob"},
@@ -144,7 +146,9 @@ func TestFilterPRsAdvanced(t *testing.T) {
 			Deletions:         2,
 			ChangedFiles:      1,
 			HadCIFailure:      false,
-			CITotalRuns:       0,
+			CICancelledRuns:   1,
+			CIStatus:          "CANCELLED",
+			CITotalRuns:       1,
 			HasMergeConflicts: false,
 		},
 	}
@@ -228,6 +232,18 @@ func TestFilterPRsAdvanced(t *testing.T) {
 			expectedPRNumbers: []int{10},
 		},
 		{
+			name:              "filter by CI timeout status",
+			opts:              FilterOptions{Checks: "timed_out"},
+			expectedPRCount:   1,
+			expectedPRNumbers: []int{11},
+		},
+		{
+			name:              "filter by CI cancelled status",
+			opts:              FilterOptions{Checks: "cancelled"},
+			expectedPRCount:   1,
+			expectedPRNumbers: []int{12},
+		},
+		{
 			name:              "filter by min lines (500)",
 			opts:              FilterOptions{MinLines: 500},
 			expectedPRCount:   1,
@@ -269,6 +285,12 @@ func TestAggregateMetricAllDimensionsAndDomains(t *testing.T) {
 	ttm1 := 7200.0
 	ttm2 := 14400.0
 	ttfr1 := 900.0
+	ci1 := 600.0
+	queue1 := 60.0
+	compute1 := 1200.0
+	ci2 := 1800.0
+	queue2 := 120.0
+	compute2 := 3600.0
 
 	prs := []ProcessedPR{
 		{
@@ -284,6 +306,11 @@ func TestAggregateMetricAllDimensionsAndDomains(t *testing.T) {
 			DraftDurationSeconds:  600,
 			PickupDurationSeconds: &pickup1,
 			IdleDurationSeconds:   1200,
+			CIDurationSeconds:     &ci1,
+			CIQueueSeconds:        &queue1,
+			CITotalComputeSeconds: &compute1,
+			CISlowestCheckName:    "lint",
+			CIStatus:              "SUCCESS",
 			Additions:             50,
 			Deletions:             10,
 			CommitCount:           3,
@@ -309,6 +336,13 @@ func TestAggregateMetricAllDimensionsAndDomains(t *testing.T) {
 			DraftDurationSeconds:  3600,
 			PickupDurationSeconds: &pickup2,
 			IdleDurationSeconds:   2400,
+			CIDurationSeconds:     &ci2,
+			CIQueueSeconds:        &queue2,
+			CITotalComputeSeconds: &compute2,
+			CISlowestCheckName:    "e2e",
+			CIStatus:              "TIMED_OUT",
+			HadCITimeout:          true,
+			TopTimedOutChecks:     []string{"e2e"},
 			Additions:             600,
 			Deletions:             200,
 			CommitCount:           8,
@@ -330,6 +364,21 @@ func TestAggregateMetricAllDimensionsAndDomains(t *testing.T) {
 		expectedMean  float64
 		validateExtra func(t *testing.T, extra map[string]interface{})
 	}{
+		{
+			name:          "time domain: ci pipeline turnaround",
+			domain:        "time",
+			metric:        "ci",
+			expectedCount: 2,
+			expectedMean:  1200,
+			validateExtra: func(t *testing.T, extra map[string]interface{}) {
+				if extra["avg_queue_seconds"] != 90.0 {
+					t.Errorf("expected avg_queue_seconds 90, got %v", extra["avg_queue_seconds"])
+				}
+				if extra["total_compute_seconds"] != 4800.0 {
+					t.Errorf("expected total_compute_seconds 4800, got %v", extra["total_compute_seconds"])
+				}
+			},
+		},
 		{
 			name:          "time domain: draft duration",
 			domain:        "time",

@@ -96,7 +96,7 @@ Available on metric domain commands (`time`, `quality`, `code`, `team`), `overvi
 | `--base` | `-b` | `""` | Filter PRs targeting specific base branch (e.g., `main`) |
 | `--head` | | `""` | Filter PRs originating from specific source/head branch pattern (e.g., `feature/auth`) |
 | `--milestone` | | `""` | Filter PRs assigned to specific milestone title |
-| `--checks` | | `all` | Filter PRs by CI/CD status: `all`, `success`, `failure`, `pending` |
+| `--checks` | | `all` | Filter PRs by CI/CD status: `all`, `success`, `failure`, `timed_out`, `cancelled`, `pending` |
 | `--has-conflicts` | | `all` | Filter PRs by merge conflict status: `all`, `true`, `false` |
 | `--min-lines` / `--max-lines` | | `0` | Filter PRs by total diff size (additions + deletions) threshold |
 | `--min-files` / `--max-files` | | `0` | Filter PRs by modified file count threshold |
@@ -142,7 +142,8 @@ gh pr-pro
 │   ├── review        # TTFR and reviewer turnaround latency
 │   ├── draft         # Duration spent in draft mode
 │   ├── pickup        # Queue time from review request to first review
-│   └── idle          # Inactivity / waiting duration
+│   ├── idle          # Inactivity / waiting duration
+│   └── ci            # CI/CD turnaround times, queue latency, and bottlenecks
 ├── quality
 │   ├── ci            # CI/CD check runs, failure rates, and retries
 │   ├── rework        # Review roundtrips and post-review churn
@@ -226,6 +227,13 @@ Breaks down inactivity duration (waiting on author vs waiting on reviewer).
 
 ```bash
 gh pr-pro time idle --past 60d
+```
+
+#### `time ci`
+Measures automated CI/CD pipeline turnaround times, runner queue dispatch delays, and critical path bottleneck checks.
+
+```bash
+gh pr-pro time ci --past 60d --percentiles
 ```
 
 ---

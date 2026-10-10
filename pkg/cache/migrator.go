@@ -128,6 +128,16 @@ func migrateLegacyToCurrent(raw []byte) ([]byte, error) {
 		return nil, err
 	}
 
+	for i := range cached.PRs {
+		if cached.PRs[i].CIStatus == "" {
+			if cached.PRs[i].HadCIFailure {
+				cached.PRs[i].CIStatus = "FAILURE"
+			} else if cached.PRs[i].CITotalRuns > 0 {
+				cached.PRs[i].CIStatus = "SUCCESS"
+			}
+		}
+	}
+
 	cached.Version = CurrentVersion
 	return json.MarshalIndent(cached, "", "  ")
 }

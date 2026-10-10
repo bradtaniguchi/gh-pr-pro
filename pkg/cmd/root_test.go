@@ -279,6 +279,7 @@ func TestMetricSubcommandsAcceptMetricFlags(t *testing.T) {
 		timeDraftCmd,
 		timePickupCmd,
 		timeIdleCmd,
+		timeCICmd,
 		qualityCICmd,
 		qualityReworkCmd,
 		qualityConflictsCmd,
