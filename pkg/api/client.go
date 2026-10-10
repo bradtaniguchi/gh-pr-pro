@@ -148,10 +148,13 @@ query FetchPRs($owner: String!, $name: String!, $cursor: String, $pageSize: Int!
                       name
                       conclusion
                       status
+                      startedAt
+                      completedAt
                     }
                     ... on StatusContext {
                       context
                       state
+                      createdAt
                     }
                   }
                 }

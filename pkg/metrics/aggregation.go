@@ -251,11 +251,19 @@ func FilterPRs(prs []ProcessedPR, opts FilterOptions) []ProcessedPR {
 					continue
 				}
 			case "success", "passed":
-				if pr.HadCIFailure || pr.CITotalRuns == 0 {
+				if pr.HadCIFailure || pr.CITotalRuns == 0 || pr.CIStatus == "CANCELLED" || pr.CIStatus == "TIMED_OUT" || pr.CIStatus == "PENDING" {
 					continue
 				}
 			case "pending":
-				if pr.CITotalRuns > 0 {
+				if pr.CIStatus != "PENDING" && pr.CITotalRuns > 0 {
+					continue
+				}
+			case "timed_out", "timeout":
+				if !pr.HadCITimeout {
+					continue
+				}
+			case "cancelled", "canceled":
+				if pr.CICancelledRuns == 0 && pr.CIStatus != "CANCELLED" {
 					continue
 				}
 			}
@@ -386,6 +394,35 @@ func computeMetricStats(prs []ProcessedPR, domain, metric string) GroupSummary {
 					values = append(values, pr.IdleDurationSeconds)
 				}
 			}
+		case "ci":
+			unit = "seconds"
+			var queueTotal float64
+			var queueCount int
+			var computeTotal float64
+			slowestCounts := make(map[string]int)
+
+			for _, pr := range prs {
+				if pr.CIDurationSeconds != nil {
+					values = append(values, *pr.CIDurationSeconds)
+				}
+				if pr.CIQueueSeconds != nil {
+					queueTotal += *pr.CIQueueSeconds
+					queueCount++
+				}
+				if pr.CITotalComputeSeconds != nil {
+					computeTotal += *pr.CITotalComputeSeconds
+				}
+				if pr.CISlowestCheckName != "" {
+					slowestCounts[pr.CISlowestCheckName]++
+				}
+			}
+			if queueCount > 0 {
+				extra["avg_queue_seconds"] = queueTotal / float64(queueCount)
+			}
+			extra["total_compute_seconds"] = computeTotal
+			if len(slowestCounts) > 0 {
+				extra["top_bottlenecks"] = slowestCounts
+			}
 		}
 
 	case "quality":
@@ -394,17 +431,29 @@ func computeMetricStats(prs []ProcessedPR, domain, metric string) GroupSummary {
 			unit = "percent"
 			total := len(prs)
 			failed := 0
+			timedOut := 0
+			cancelled := 0
 			totalRetries := 0
 			failingCounts := make(map[string]int)
+			timedOutCounts := make(map[string]int)
 			for _, pr := range prs {
 				if pr.HadCIFailure {
 					failed++
+				}
+				if pr.HadCITimeout {
+					timedOut++
+				}
+				if pr.CICancelledRuns > 0 || pr.CIStatus == "CANCELLED" {
+					cancelled++
 				}
 				if pr.CIFailedRuns > 0 {
 					totalRetries += pr.CIFailedRuns
 				}
 				for _, name := range pr.TopFailingChecks {
 					failingCounts[name]++
+				}
+				for _, name := range pr.TopTimedOutChecks {
+					timedOutCounts[name]++
 				}
 			}
 			failPct := 0.0
@@ -413,8 +462,13 @@ func computeMetricStats(prs []ProcessedPR, domain, metric string) GroupSummary {
 			}
 			extra["failed_prs"] = failed
 			extra["failed_rate_percent"] = failPct
+			extra["timed_out_prs"] = timedOut
+			extra["cancelled_prs"] = cancelled
 			extra["total_retries"] = totalRetries
 			extra["top_failing"] = failingCounts
+			if len(timedOutCounts) > 0 {
+				extra["top_timed_out"] = timedOutCounts
+			}
 			values = append(values, failPct)
 
 		case "rework":

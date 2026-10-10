@@ -668,3 +668,35 @@ func TestMigratorPipeline(t *testing.T) {
 		t.Errorf("expected error for missing migration step")
 	}
 }
+
+func TestMigrateLegacyToCurrent_CISynthesis(t *testing.T) {
+	legacy := []byte(`{
+		"version": "v0.0.0",
+		"repo": "owner/repo",
+		"prs": [
+			{"number": 1, "had_ci_failure": true, "ci_total_runs": 2},
+			{"number": 2, "had_ci_failure": false, "ci_total_runs": 3},
+			{"number": 3, "had_ci_failure": false, "ci_total_runs": 0}
+		]
+	}`)
+
+	upgraded, err := migrateLegacyToCurrent(legacy)
+	if err != nil {
+		t.Fatalf("unexpected migration error: %v", err)
+	}
+
+	var cached CachedData
+	if err := json.Unmarshal(upgraded, &cached); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if cached.PRs[0].CIStatus != "FAILURE" {
+		t.Errorf("expected PR 1 to have CIStatus FAILURE, got %s", cached.PRs[0].CIStatus)
+	}
+	if cached.PRs[1].CIStatus != "SUCCESS" {
+		t.Errorf("expected PR 2 to have CIStatus SUCCESS, got %s", cached.PRs[1].CIStatus)
+	}
+	if cached.PRs[2].CIStatus != "" {
+		t.Errorf("expected PR 3 to have empty CIStatus, got %s", cached.PRs[2].CIStatus)
+	}
+}
