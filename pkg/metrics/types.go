@@ -93,6 +93,26 @@ type ProcessedPR struct {
 	CITotalRuns int `json:"ci_total_runs"`
 	// TopFailingChecks lists the names of individual CI check suites that failed.
 	TopFailingChecks []string `json:"top_failing_checks,omitempty"`
+	// CIStatus is the overall rollup outcome: "SUCCESS", "FAILURE", "TIMED_OUT", "CANCELLED", or "PENDING".
+	CIStatus string `json:"ci_status,omitempty"`
+	// HadCITimeout indicates if any check run in the latest commit status rollup timed out.
+	HadCITimeout bool `json:"had_ci_timeout"`
+	// CITimedOutRuns is the count of check runs that timed out in the latest commit rollup.
+	CITimedOutRuns int `json:"ci_timed_out_runs"`
+	// CICancelledRuns is the count of check runs that were cancelled in the latest commit rollup.
+	CICancelledRuns int `json:"ci_cancelled_runs"`
+	// TopTimedOutChecks lists the names of individual CI check suites that timed out.
+	TopTimedOutChecks []string `json:"top_timed_out_checks,omitempty"`
+	// CIDurationSeconds is the wall-clock pipeline duration (max completedAt - min startedAt) in seconds.
+	CIDurationSeconds *float64 `json:"ci_duration_seconds,omitempty"`
+	// CIQueueSeconds is the queue dispatch latency from commit to first runner start in seconds.
+	CIQueueSeconds *float64 `json:"ci_queue_seconds,omitempty"`
+	// CITotalComputeSeconds is the cumulative runner runtime across all checks in seconds.
+	CITotalComputeSeconds *float64 `json:"ci_total_compute_seconds,omitempty"`
+	// CISlowestCheckName is the name of the longest running check run.
+	CISlowestCheckName string `json:"ci_slowest_check_name,omitempty"`
+	// CISlowestCheckSeconds is the execution runtime of the longest running check run in seconds.
+	CISlowestCheckSeconds *float64 `json:"ci_slowest_check_seconds,omitempty"`
 	// HasMergeConflicts indicates whether git reports merge conflicts with the target base branch.
 	HasMergeConflicts bool `json:"has_merge_conflicts"`
 	// IsReverted indicates if the PR matches revert naming patterns or revert labels.

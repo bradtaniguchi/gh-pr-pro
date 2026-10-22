@@ -12,9 +12,13 @@ var timeCmd = &cobra.Command{
   • review - Time to First Review (TTFR) and reviewer response turnaround
   • draft  - Duration PRs spend in draft mode before marked ready for review
   • pickup - Queue latency between review requests and first reviewer action
-  • idle   - Inactivity and stalled waiting durations during PR lifecycle`,
+  • idle   - Inactivity and stalled waiting durations during PR lifecycle
+  • ci     - CI/CD pipeline execution turnaround, queue latency, and bottleneck checks`,
 	Example: `  # Analyze merge cycle time over the past 90 days grouped by month
   gh pr-pro time merge --past 90d --group-by month
+
+  # Analyze CI pipeline execution turnaround over the past 60 days
+  gh pr-pro time ci --past 60d
 
   # Inspect Time to First Review (TTFR) grouped by reviewer
   gh pr-pro time review --past 30d --group-by reviewer
@@ -89,10 +93,30 @@ vs. waiting on peer reviews).`,
 	},
 }
 
+var timeCICmd = &cobra.Command{
+	Use:   "ci",
+	Short: "Analyze CI/CD pipeline execution duration, queue latency, and bottlenecks",
+	Long: `Measures automated CI/CD pipeline turnaround times, runner queue dispatch delays,
+and total compute runtime across PRs. Calculates median (p50), p75, p90, and mean wall-clock execution durations
+and identifies critical path bottleneck checks.`,
+	Example: `  # Analyze CI pipeline turnaround duration over the past 60 days
+  gh pr-pro time ci --past 60d
+
+  # Pipeline duration grouped by PR size category
+  gh pr-pro time ci --past 90d --group-by size
+
+  # Inspect queue delay and pipeline timings for merged PRs
+  gh pr-pro time ci --state merged --percentiles`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return RunMetricCommand(cmd, "time", "ci")
+	},
+}
+
 func init() {
 	timeCmd.AddCommand(timeMergeCmd)
 	timeCmd.AddCommand(timeReviewCmd)
 	timeCmd.AddCommand(timeDraftCmd)
 	timeCmd.AddCommand(timePickupCmd)
 	timeCmd.AddCommand(timeIdleCmd)
+	timeCmd.AddCommand(timeCICmd)
 }

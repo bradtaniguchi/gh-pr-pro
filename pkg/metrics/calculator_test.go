@@ -177,6 +177,177 @@ func TestProcessPRNode(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "PR with check runs: timings, queue delay, compute sum, slowest bottleneck check",
+			buildNode: func() api.GraphQLPRNode {
+				node := api.GraphQLPRNode{
+					Number:    104,
+					Title:     "feat: ci timing check",
+					State:     "OPEN",
+					CreatedAt: created,
+				}
+				commitDate := created.Add(10 * time.Minute)
+				job1Start := commitDate.Add(2 * time.Minute)
+				job1End := job1Start.Add(5 * time.Minute) // 300s
+				job2Start := commitDate.Add(3 * time.Minute)
+				job2End := job2Start.Add(10 * time.Minute) // 600s
+
+				type checkNode = struct {
+					Typename    string     `json:"__typename"`
+					Name        string     `json:"name,omitempty"`
+					Conclusion  string     `json:"conclusion,omitempty"`
+					Status      string     `json:"status,omitempty"`
+					StartedAt   *time.Time `json:"startedAt,omitempty"`
+					CompletedAt *time.Time `json:"completedAt,omitempty"`
+					Context     string     `json:"context,omitempty"`
+					State       string     `json:"state,omitempty"`
+					CreatedAt   *time.Time `json:"createdAt,omitempty"`
+				}
+
+				commitNode := struct {
+					Commit struct {
+						CommittedDate     time.Time `json:"committedDate"`
+						StatusCheckRollup *struct {
+							State    string `json:"state"`
+							Contexts struct {
+								TotalCount int         `json:"totalCount"`
+								Nodes      []checkNode `json:"nodes"`
+							} `json:"contexts"`
+						} `json:"statusCheckRollup"`
+					} `json:"commit"`
+				}{}
+				commitNode.Commit.CommittedDate = commitDate
+				commitNode.Commit.StatusCheckRollup = &struct {
+					State    string `json:"state"`
+					Contexts struct {
+						TotalCount int         `json:"totalCount"`
+						Nodes      []checkNode `json:"nodes"`
+					} `json:"contexts"`
+				}{
+					State: "SUCCESS",
+				}
+				commitNode.Commit.StatusCheckRollup.Contexts.Nodes = []checkNode{
+					{
+						Typename:    "CheckRun",
+						Name:        "lint",
+						Conclusion:  "SUCCESS",
+						Status:      "COMPLETED",
+						StartedAt:   &job1Start,
+						CompletedAt: &job1End,
+					},
+					{
+						Typename:    "CheckRun",
+						Name:        "e2e-tests",
+						Conclusion:  "SUCCESS",
+						Status:      "COMPLETED",
+						StartedAt:   &job2Start,
+						CompletedAt: &job2End,
+					},
+				}
+				node.Commits.Nodes = append(node.Commits.Nodes, commitNode)
+				return node
+			},
+			validatePR: func(t *testing.T, pr ProcessedPR) {
+				if pr.CIStatus != "SUCCESS" {
+					t.Errorf("expected CIStatus SUCCESS, got %s", pr.CIStatus)
+				}
+				if pr.CITotalRuns != 2 {
+					t.Errorf("expected 2 runs, got %d", pr.CITotalRuns)
+				}
+				if pr.CIDurationSeconds == nil || *pr.CIDurationSeconds != 660 { // job2End (13m) - job1Start (2m) = 11m = 660s
+					t.Errorf("expected wall-clock duration 660s, got %v", pr.CIDurationSeconds)
+				}
+				if pr.CIQueueSeconds == nil || *pr.CIQueueSeconds != 120 { // job1Start - commitDate = 2m = 120s
+					t.Errorf("expected queue seconds 120s, got %v", pr.CIQueueSeconds)
+				}
+				if pr.CITotalComputeSeconds == nil || *pr.CITotalComputeSeconds != 900 { // 300 + 600 = 900s
+					t.Errorf("expected compute seconds 900s, got %v", pr.CITotalComputeSeconds)
+				}
+				if pr.CISlowestCheckName != "e2e-tests" {
+					t.Errorf("expected slowest check e2e-tests, got %s", pr.CISlowestCheckName)
+				}
+				if pr.CISlowestCheckSeconds == nil || *pr.CISlowestCheckSeconds != 600 {
+					t.Errorf("expected slowest duration 600s, got %v", pr.CISlowestCheckSeconds)
+				}
+			},
+		},
+		{
+			name: "PR with TIMED_OUT check run and CANCELLED check run",
+			buildNode: func() api.GraphQLPRNode {
+				node := api.GraphQLPRNode{
+					Number:    105,
+					Title:     "feat: timeout test",
+					State:     "OPEN",
+					CreatedAt: created,
+				}
+				type checkNode = struct {
+					Typename    string     `json:"__typename"`
+					Name        string     `json:"name,omitempty"`
+					Conclusion  string     `json:"conclusion,omitempty"`
+					Status      string     `json:"status,omitempty"`
+					StartedAt   *time.Time `json:"startedAt,omitempty"`
+					CompletedAt *time.Time `json:"completedAt,omitempty"`
+					Context     string     `json:"context,omitempty"`
+					State       string     `json:"state,omitempty"`
+					CreatedAt   *time.Time `json:"createdAt,omitempty"`
+				}
+
+				commitNode := struct {
+					Commit struct {
+						CommittedDate     time.Time `json:"committedDate"`
+						StatusCheckRollup *struct {
+							State    string `json:"state"`
+							Contexts struct {
+								TotalCount int         `json:"totalCount"`
+								Nodes      []checkNode `json:"nodes"`
+							} `json:"contexts"`
+						} `json:"statusCheckRollup"`
+					} `json:"commit"`
+				}{}
+				commitNode.Commit.StatusCheckRollup = &struct {
+					State    string `json:"state"`
+					Contexts struct {
+						TotalCount int         `json:"totalCount"`
+						Nodes      []checkNode `json:"nodes"`
+					} `json:"contexts"`
+				}{
+					State: "FAILURE",
+				}
+				commitNode.Commit.StatusCheckRollup.Contexts.Nodes = []checkNode{
+					{
+						Typename:   "CheckRun",
+						Name:       "integration-tests",
+						Conclusion: "TIMED_OUT",
+						Status:     "COMPLETED",
+					},
+					{
+						Typename:   "CheckRun",
+						Name:       "lint",
+						Conclusion: "CANCELLED",
+						Status:     "COMPLETED",
+					},
+				}
+				node.Commits.Nodes = append(node.Commits.Nodes, commitNode)
+				return node
+			},
+			validatePR: func(t *testing.T, pr ProcessedPR) {
+				if !pr.HadCITimeout {
+					t.Errorf("expected HadCITimeout to be true")
+				}
+				if pr.CIStatus != "TIMED_OUT" {
+					t.Errorf("expected CIStatus TIMED_OUT, got %s", pr.CIStatus)
+				}
+				if pr.CITimedOutRuns != 1 {
+					t.Errorf("expected 1 timed out run, got %d", pr.CITimedOutRuns)
+				}
+				if pr.CICancelledRuns != 1 {
+					t.Errorf("expected 1 cancelled run, got %d", pr.CICancelledRuns)
+				}
+				if len(pr.TopTimedOutChecks) != 1 || pr.TopTimedOutChecks[0] != "integration-tests" {
+					t.Errorf("expected TopTimedOutChecks [integration-tests], got %v", pr.TopTimedOutChecks)
+				}
+			},
+		},
 	}
 
 	for _, tc := range tests {

@@ -63,12 +63,15 @@ type GraphQLPRNode struct {
 						Nodes      []struct {
 							Typename string `json:"__typename"`
 							// For CheckRun
-							Name       string `json:"name,omitempty"`
-							Conclusion string `json:"conclusion,omitempty"`
-							Status     string `json:"status,omitempty"`
+							Name        string     `json:"name,omitempty"`
+							Conclusion  string     `json:"conclusion,omitempty"`
+							Status      string     `json:"status,omitempty"`
+							StartedAt   *time.Time `json:"startedAt,omitempty"`
+							CompletedAt *time.Time `json:"completedAt,omitempty"`
 							// For StatusContext
-							Context string `json:"context,omitempty"`
-							State   string `json:"state,omitempty"`
+							Context   string     `json:"context,omitempty"`
+							State     string     `json:"state,omitempty"`
+							CreatedAt *time.Time `json:"createdAt,omitempty"`
 						} `json:"nodes"`
 					} `json:"contexts"`
 				} `json:"statusCheckRollup"`

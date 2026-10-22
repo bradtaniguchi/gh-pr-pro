@@ -185,10 +185,20 @@ func ProcessPRNode(node api.GraphQLPRNode) ProcessedPR {
 			contexts := rollup.Contexts.Nodes
 			pr.CITotalRuns = len(contexts)
 			failedCount := 0
+			timedOutCount := 0
+			cancelledCount := 0
+			pendingCount := 0
 			var failingNames []string
+			var timedOutNames []string
+
+			var minStarted *time.Time
+			var maxCompleted *time.Time
+			var totalComputeSec float64
+			var slowestCheckName string
+			slowestCheckSec := -1.0
+			completedCount := 0
 
 			for _, ctx := range contexts {
-				isFailed := false
 				name := ctx.Name
 				if name == "" {
 					name = ctx.Context
@@ -196,26 +206,100 @@ func ProcessPRNode(node api.GraphQLPRNode) ProcessedPR {
 
 				switch ctx.Typename {
 				case "CheckRun":
-					if ctx.Conclusion == "FAILURE" || ctx.Conclusion == "TIMED_OUT" || ctx.Conclusion == "STARTUP_FAILURE" {
-						isFailed = true
+					switch ctx.Conclusion {
+					case "FAILURE", "STARTUP_FAILURE":
+						failedCount++
+						if name != "" {
+							failingNames = append(failingNames, name)
+						}
+					case "TIMED_OUT":
+						timedOutCount++
+						if name != "" {
+							timedOutNames = append(timedOutNames, name)
+						}
+					case "CANCELLED":
+						cancelledCount++
 					}
-				case "StatusContext":
-					if ctx.State == "FAILURE" || ctx.State == "ERROR" {
-						isFailed = true
-					}
-				}
 
-				if isFailed {
-					failedCount++
-					if name != "" {
-						failingNames = append(failingNames, name)
+					if ctx.Status == "IN_PROGRESS" || ctx.Status == "QUEUED" || ctx.Status == "WAITING" || ctx.Status == "REQUESTED" {
+						pendingCount++
+					}
+
+					if ctx.StartedAt != nil {
+						if minStarted == nil || ctx.StartedAt.Before(*minStarted) {
+							minStarted = ctx.StartedAt
+						}
+					}
+
+					if ctx.StartedAt != nil && ctx.CompletedAt != nil {
+						dur := ctx.CompletedAt.Sub(*ctx.StartedAt).Seconds()
+						if dur >= 0 {
+							completedCount++
+							totalComputeSec += dur
+							if maxCompleted == nil || ctx.CompletedAt.After(*maxCompleted) {
+								maxCompleted = ctx.CompletedAt
+							}
+							if dur > slowestCheckSec {
+								slowestCheckSec = dur
+								slowestCheckName = name
+							}
+						}
+					}
+
+				case "StatusContext":
+					switch ctx.State {
+					case "FAILURE", "ERROR":
+						failedCount++
+						if name != "" {
+							failingNames = append(failingNames, name)
+						}
+					case "PENDING", "EXPECTED":
+						pendingCount++
 					}
 				}
 			}
 
 			pr.CIFailedRuns = failedCount
-			pr.HadCIFailure = (failedCount > 0) || (rollup.State == "FAILURE" || rollup.State == "ERROR")
+			pr.CITimedOutRuns = timedOutCount
+			pr.CICancelledRuns = cancelledCount
+			pr.HadCITimeout = timedOutCount > 0
+			pr.HadCIFailure = (failedCount > 0) || (timedOutCount > 0) || (rollup.State == "FAILURE" || rollup.State == "ERROR")
 			pr.TopFailingChecks = failingNames
+			pr.TopTimedOutChecks = timedOutNames
+
+			// Determine rollup CIStatus
+			switch {
+			case timedOutCount > 0:
+				pr.CIStatus = "TIMED_OUT"
+			case failedCount > 0 || rollup.State == "FAILURE" || rollup.State == "ERROR":
+				pr.CIStatus = "FAILURE"
+			case cancelledCount > 0 && (completedCount+cancelledCount == len(contexts)):
+				pr.CIStatus = "CANCELLED"
+			case pendingCount > 0 || rollup.State == "PENDING" || rollup.State == "EXPECTED":
+				pr.CIStatus = "PENDING"
+			case len(contexts) > 0:
+				pr.CIStatus = "SUCCESS"
+			}
+
+			// Timings
+			if minStarted != nil && maxCompleted != nil {
+				wallClock := maxCompleted.Sub(*minStarted).Seconds()
+				if wallClock >= 0 {
+					pr.CIDurationSeconds = &wallClock
+				}
+				pr.CITotalComputeSeconds = &totalComputeSec
+				if slowestCheckSec >= 0 {
+					pr.CISlowestCheckName = slowestCheckName
+					pr.CISlowestCheckSeconds = &slowestCheckSec
+				}
+			}
+
+			if minStarted != nil && !commit.CommittedDate.IsZero() {
+				queueSec := minStarted.Sub(commit.CommittedDate).Seconds()
+				if queueSec >= 0 {
+					pr.CIQueueSeconds = &queueSec
+				}
+			}
 		}
 	}
 
