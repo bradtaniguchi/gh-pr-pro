@@ -1,6 +1,6 @@
 module github.com/brad/gh-pr-pro
 
-go 1.26.9
+go 1.27.4
 
 require (
 	github.com/cli/go-gh/v2 v2.17.0
