@@ -1,7 +1,7 @@
 BINARY_NAME ?= gh-pr-pro
 GOVULNCHECK_VERSION ?= v1.8.0
 LEFTHOOK_VERSION ?= v1.13.6
-GOLANGCI_LINT_VERSION ?= v2.14.0
+GOLANGCI_LINT_VERSION ?= v2.15.0
 GOLANGCI_LINT_MODULE ?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS ?= -s -w -X github.com/brad/gh-pr-pro/pkg/version.Version=$(VERSION)
